@@ -18,6 +18,8 @@ Les API Expo changent à chaque release SDK — ne pas se fier à ses souvenirs.
 - Routes dans `src/app/` — un fichier = un écran, `_layout.tsx` = navigators.
 - Composants, hooks et utilitaires restent **hors de** `src/app/`.
 - Imports de navigation : `Link`, `router`, `useLocalSearchParams` depuis `expo-router`.
+- État global : Redux Toolkit dans `src/store/` (tranches + persistance redux-persist) — toujours les hooks typés `useAppDispatch` / `useAppSelector` de `src/store/hooks.ts`.
+- Variante de plateforme : un composant commun peut avoir un frère `.web.tsx` choisi par Metro au même import (ex. `usine-ecran.tsx` = caméra natif, `usine-ecran.web.tsx` = saisie manuelle web) — jamais de `Platform.OS` pour tout un écran.
 
 ## Règles dures
 
@@ -25,6 +27,13 @@ Les API Expo changent à chaque release SDK — ne pas se fier à ses souvenirs.
 - Toujours `npx expo install` pour ajouter une dépendance.
 - Lint + typecheck obligatoires avant de clôturer une tâche.
 - Pas de secret (clé d'API, token) en dur dans le code ou dans la configuration versionnée.
+
+## Variables d'environnement
+
+- Les clés préfixées **`EXPO_PUBLIC_`** sont en plus inlinées dans le bundle JS (client web/mobile) par Expo CLI — cf. [`/guides/environment-variables`](https://docs.expo.dev/guides/environment-variables.md). Tout le contenu de `.env` est en revanche chargé dans le process des commandes Expo (visible côté config dynamique).
+- Variables « bare » à lire depuis le **code client** (ex. `DEBUG`) : passer par la config dynamique [`app.config.ts`](../app.config.ts) — `process.env.DEBUG === 'true'` → `extra.debug` — puis lire via `Constants.expoConfig.extra.debug` (expo-constants). Pattern documenté dans [`/workflow/configuration`](https://docs.expo.dev/workflow/configuration.md) (dynamic configuration).
+- Valeurs par défaut versionnées dans `.env` ; surcharges locales dans `.env*.local` (non versionné ; l'existant du shell gagne sur `.env`).
+- Rien de confidentiel derrière ces mécanismes : valeurs visibles en clair (bundle/manifest).
 
 ## Documentation des écrans (règle constante)
 

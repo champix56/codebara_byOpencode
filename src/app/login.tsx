@@ -10,7 +10,17 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, Stack } from 'expo-router';
+import Constants from 'expo-constants';
+import { useAppDispatch } from '../store/hooks';
+import { UTILISATEUR_DEBUG, seConnecter } from '../store/utilisateur';
+
+// Bouton de debug : visible uniquement si la variable d'environnement DEBUG vaut « true »
+// (shell : `DEBUG=true npx expo start`, ou `DEBUG=true` dans .env). La config dynamique
+// (app.config.ts) fait l'aiguillage : valeur inlinée via EXPO_PUBLIC_DEBUG côté bundle,
+// plus redondance via Constants.expoConfig.extra.debug (réliable en natif).
+const MODE_DEBUG =
+  process.env.EXPO_PUBLIC_DEBUG === 'true' || Constants.expoConfig?.extra?.debug === true;
 
 type Mode = 'login' | 'signup';
 
@@ -20,6 +30,7 @@ export default function ConnexionScreen() {
   const [mode, setMode] = useState<Mode>('login');
   const [identifiant, setIdentifiant] = useState('');
   const [motDePasse, setMotDePasse] = useState('');
+  const dispatcher = useAppDispatch();
   const canSubmit = identifiant.trim().length > 0 && motDePasse.length > 0;
 
   const soumettre = () => {
@@ -33,11 +44,20 @@ export default function ConnexionScreen() {
 
   const basculerMode = () => setMode(mode === 'login' ? 'signup' : 'login');
 
+  // Bouton debug : saute l'authentification, charge le compte GOD dans la tranche
+  // utilisateur persistante puis ouvre la fenêtre principale.
+  const passerAuthentification = () => {
+    dispatcher(seConnecter(UTILISATEUR_DEBUG));
+    router.replace('/principal');
+  };
+
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <Image
           source={require('../../assets/icon.png')}
@@ -82,6 +102,15 @@ export default function ConnexionScreen() {
             </Text>
           </Pressable>
 
+          {MODE_DEBUG && (
+            <Pressable
+              style={({ pressed }) => [styles.buttonDebug, pressed && styles.buttonDebugPressed]}
+              onPress={passerAuthentification}
+            >
+              <Text style={styles.buttonDebugLabel}>Debug : passer l’authentification</Text>
+            </Pressable>
+          )}
+
           <Pressable hitSlop={8} onPress={basculerMode}>
             <Text style={styles.link}>
               {mode === 'login'
@@ -91,7 +120,8 @@ export default function ConnexionScreen() {
           </Pressable>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </>
   );
 }
 
@@ -150,6 +180,24 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     backgroundColor: '#a5d6a7',
+  },
+  buttonDebug: {
+    height: 48,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    backgroundColor: '#ffffff',
+    marginTop: 10,
+  },
+  buttonDebugPressed: {
+    backgroundColor: '#f3f4f6',
+  },
+  buttonDebugLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6b7280',
   },
   buttonLabel: {
     fontSize: 16,

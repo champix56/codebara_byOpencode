@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, Stack } from 'expo-router';
 
 // Tâches de chargement factices : 2 s chacune, dans l'ordre.
 const TASKS = ['auto-connexion', 'recuperation de la collection'] as const;
@@ -30,7 +30,9 @@ export default function ChargementScreen() {
   const task = TASKS[Math.min(TASKS.length - 1, Math.floor(progress * TASKS.length))];
 
   return (
-    <View style={styles.container}>
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <View style={styles.container}>
       <View style={styles.logoWrap}>
         <Image
           source={require('../../assets/icon.png')}
@@ -45,7 +47,8 @@ export default function ChargementScreen() {
           <View style={[styles.fill, { width: `${percent}%` }]} />
         </View>
       </View>
-    </View>
+      </View>
+    </>
   );
 }
 

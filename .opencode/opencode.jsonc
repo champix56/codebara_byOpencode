@@ -1,0 +1,24 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Bloquer totalement les commandes destructives, demander confirmation
+  // avant toute action affectant l'historique Git ou le système de fichiers.
+  "permissions": [
+    { "action": "shell", "resource": "git push --force*", "effect": "deny" },
+    { "action": "shell", "resource": "git push *", "effect": "ask" },
+    { "action": "shell", "resource": "git reset --hard*", "effect": "ask" },
+    { "action": "shell", "resource": "git clean -f*", "effect": "ask" },
+    { "action": "shell", "resource": "rm -rf *", "effect": "ask" },
+    { "action": "shell", "resource": "sudo *", "effect": "deny" },
+  ],
+  // Ne pas surveiller les fichiers générés ou volumineux.
+  "watcher": {
+    "ignore": [
+      "node_modules/**",
+      ".expo/**",
+      "dist/**",
+      "web-build/**",
+      "ios/**",
+      "android/**",
+    ],
+  },
+}

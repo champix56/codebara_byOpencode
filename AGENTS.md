@@ -39,3 +39,13 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## Screen documentation rule (constant)
+
+Every screen ("fenêtre") the user asks about MUST be described in its own dedicated Markdown file — never in the conversation — to limit token usage:
+
+- Location: `docs/screens/<screen-id>.md`, one file per screen, `<screen-id>` in kebab-case matching the screen/route name.
+- If the file already exists, read it and update it in place instead of rewriting from scratch.
+- File structure: Rôle, Structure visuelle, États, Navigation, + notes when needed (keep it concise, write in French).
+- Add the new file to the index table in `docs/screens/README.md`.
+- In the conversation, reply with the file path and a one-line summary only. Never paste the full description.

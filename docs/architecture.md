@@ -69,7 +69,7 @@ Flux : `/` exécute ses tâches puis `router.replace('/login')` — l'écran de 
 - `src/store/utilisateur.ts` — tranche `utilisateur` : `idUser`, `nickname`, `hash`, `token`, `mail` ; actions `seConnecter` / `seDeconnecter` ; export `UTILISATEUR_DEBUG` (bypass debug de la connexion : id `-9999`, nickname `GOD`, hash `null`, token `-1`, mail `codebara@free.fr`).
 - `src/store/hooks.ts` — hooks typés `useAppDispatch` / `useAppSelector` : à utiliser partout, jamais les hooks bruts de react-redux.
 - Montage : `Provider` + `PersistGate` dans `src/app/_layout.tsx`.
-- Redux DevTools : web → extension navigateur (RTK l'active par défaut) ; natif en dev → `@redux-devtools/remote` branché sur le store (`src/store/store.ts`, chemin `__DEV__` non-web), moniteur `npx --yes @redux-devtools/cli redux-devtools` sur le port 8000 et, pour un téléphone physique, `EXPO_PUBLIC_DEVTOOLS_HOST=<IP LAN>` au démarrage.
+- Redux DevTools : web → extension navigateur (RTK l'active par défaut) ; natif en dev → `@redux-devtools/remote` branché sur le store (`src/store/store.ts`, chemin `__DEV__` non-web), moniteur `npx --yes @redux-devtools/cli redux-devtools` sur le port 8000 et, pour un téléphone physique, `EXPO_PUBLIC_DEVTOOLS_HOST=<IP LAN>` au démarrage. Hermes n'ayant pas le global `crypto` (Web Crypto) requis par `uuid` — transport devtools via socketcluster-client — le store installe un polyfill `global.crypto` via `expo-crypto` **avant** le `require('@redux-devtools/remote')`.
 - Déconnexion (bouton du menu latéral, fenêtre principale uniquement) : `dispatch(seDeconnecter())` + `persistor.purge()` puis `router.replace('/login')`.
 
 ## Dossiers natifs

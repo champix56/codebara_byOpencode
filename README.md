@@ -37,7 +37,7 @@ La variable « bare » **`DEBUG`** (shell ou `.env` versionné) affiche, sur la 
 ## Redux DevTools
 
 - **Web** : rien à configurer — Redux Toolkit active l'extension [Redux DevTools du navigateur](https://chromewebstore.google.com/detail/redux-devtools/lmhkpmbekcpmknklioeibfkpnnfiblib) (les actions et l'état apparaissent dans l'onglet DevTools).
-- **Natif (dev)** : `@redux-devtools/remote` est branché sur la création du store (`src/store/store.ts`, uniquement en `__DEV__` non-web) vers un moniteur sur le port 8000 :
+- **Natif (dev)** : `@redux-devtools/remote` est branché sur la création du store (`src/store/store.ts`, uniquement en `__DEV__` non-web) vers un moniteur sur le port 8000. Note : Hermes n'expose pas la Web Crypto, indispensable à `uuid` (transport des devtools) — le store pose un polyfill `global.crypto` via `expo-crypto` juste avant de charger la dépendance :
 
 ```bash
 npx --yes @redux-devtools/cli redux-devtools   # moniteur local (UI web/électron)

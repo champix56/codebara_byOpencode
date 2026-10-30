@@ -10,7 +10,7 @@ Un fichier Markdown par écran (« fenêtre ») de l'application. Règle constan
 | [connexion.md](./connexion.md) | Connexion / création de compte (route `/login`) — en attendant le serveur : bouton debug et entrée directe | 2026-10-30 |
 | [principal.md](./principal.md) | Fenêtre principale (route `/principal`) — carte plein écran, zones data-action taponables, bandeau publicitaire bas | 2026-10-30 |
 | [usine.md](./usine.md) | Usine (route `/usine`) — scanneur de codes-barres EAN-8/13, UPC-A/UPC-E + UPC-B (caméra natif, saisie manuelle web) | 2026-10-30 |
-| [maison.md](./maison.md) | Maison (route `/maison`) — fenêtre vierge (retour discret) | 2026-10-30 |
+| [maison.md](./maison.md) | Maison (route `/maison`) — formulaire du compte : modification nickname + mot de passe (tranche utilisateur persistée) | 2026-10-30 |
 | [boutique.md](./boutique.md) | Boutique (route `/boutique`) — fenêtre vierge (retour discret) | 2026-10-30 |
 | [arene.md](./arene.md) | Arène (route `/arene`) — fenêtre vierge (retour discret) | 2026-10-30 |
 

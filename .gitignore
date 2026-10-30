@@ -44,3 +44,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# paquets d'-assets externes (.cdz = zip binaire, hors assets Expo) — jamais versionnés
+*.cdz

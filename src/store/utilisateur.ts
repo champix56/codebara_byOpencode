@@ -11,6 +11,9 @@ export type Utilisateur = {
   mail: string;
 };
 
+// Sous-ensemble modifiable depuis la fenêtre maison (formulaire du compte).
+export type ProfilPartiel = Partial<Pick<Utilisateur, 'nickname' | 'hash'>>;
+
 const ETAT_INITIAL: Utilisateur = {
   idUser: null,
   nickname: '',
@@ -38,10 +41,16 @@ const trancheUtilisateur = createSlice({
       ...etat,
       ...action.payload,
     }),
+    // Modification locale du profil (nickname et/ou hash) — fenêtre maison.
+    // Payload partiel : les champs absents conservent leur valeur.
+    modifierProfil: (etat, action: PayloadAction<ProfilPartiel>) => ({
+      ...etat,
+      ...action.payload,
+    }),
     // Retour à l'état initial (aussi appelé par le bouton de déconnexion).
     seDeconnecter: () => ETAT_INITIAL,
   },
 });
 
-export const { seConnecter, seDeconnecter } = trancheUtilisateur.actions;
+export const { seConnecter, seDeconnecter, modifierProfil } = trancheUtilisateur.actions;
 export default trancheUtilisateur.reducer;

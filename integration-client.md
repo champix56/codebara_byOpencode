@@ -150,7 +150,7 @@ datas: {"API_TOKEN": "ab12...", "API_REQUEST_TOKEN": "cd34..."}
   Created) est dans l'objet métier d'origine, **pas** dans l'en-tête HTTP (le corps est
   envoyé par `web.json_response` sans statut dédié). Ne vous fiez qu'au contenu JSON +
   à la présence d'`API_REQUEST_TOKEN`.
-- **Réponse d'erreur** : `HTTP 400` ou `404` avec un corps **texte au format JSON
+- **Réponse d'erreur** : `HTTP 400`, `403` ou `404` avec un corps **texte au format JSON
   minimal**, un seul objet `{"message": "..."}` (vérifié dans `networkResponses.toResponse`) :
 
   `{"message": "Invalid REQUEST TOKEN"}`
@@ -159,6 +159,7 @@ datas: {"API_TOKEN": "ab12...", "API_REQUEST_TOKEN": "cd34..."}
 
   | Message | Cause | Réaction client |
   |---|---|---|
+  | `Forbidden` (403) | « métier refusé » : `POST /user` (mail mal formé ou compte déjà existant), `POST /user/renew-password` (mail mal formé ou compte inconnu) | formulaire : ressaissir le mail ; sur l'inscription, proposer connexion / mot de passe oublié |
   | `Invalid REQUEST TOKEN` (400) | `API_TOKEN`/`API_REQUEST_TOKEN` périmés ou faux | re-connexion (login/pass) puis refaire l'appel |
   | `Invalid Path/Method for: method: X on route: /...` (404) | endpoint inexistant, méthode non prévue — **ou échec d'authentification sur `/user/auth`** (login/pass ou tokens invalides) | ne pas insister ; sur `/user/auth` cela signifie « identifiants refusés » |
   | `Invalid Request with body given for: ...` (400) | JSON malformé / clé manquante / exception serveur — **masque aussi les pannes internes** (dont l'indisponibilité du serveur d'IA, cf. §9.2) | log complet ; sur `POST /card`, signaler « génération indisponible » |
@@ -178,7 +179,8 @@ datas: {"API_TOKEN": "ab12...", "API_REQUEST_TOKEN": "cd34..."}
 | Endpoint | Méthode | Auth | État |
 |---|---|---|---|
 | `/user/auth` | GET | non (c'est l'appel d'auth) | **✔ actif** |
-| `/user` | POST | non (création) | **✔ actif** |
+| `/user` | POST | non (création) | **✔ actif** (403 Forbidden si mail mal formé ou compte déjà existant) |
+| `/user/renew-password` | POST | non (mot de passe oublié) | **✔ actif** (ajouté 2026-10-30, cf. §5.9) |
 | `/user` | GET (user connecté) | tokens | ✗ prévu (404) |
 | `/user/{id}` | GET | tokens | ✗ prévu (404) |
 | `/user` | PUT (maj profil) | tokens | ✗ prévu (404) |
@@ -208,12 +210,15 @@ Content-Type: application/json
 {"API_TOKEN": "9a1f…64 hex…", "API_REQUEST_TOKEN": "0e7c…64 hex…"}
 ```
 
-**Effets serveur** : création de l'utilisateur (nickname initial = mail), mot de passe
-généré (15 car.) **envoyé par e-mail** (si `DEBUG=False`) ; retourne les deux tokens.
-**Limites** (vérifiées dans le code) :
-- pas de contrôle de syntaxe du mail (le serveur ne vérifie pas le format) ;
-- mail déjà utilisé : l'INSERT échoue sur la contrainte UNIQUE → le serveur renvoie
-  **HTTP 500 avec le corps `{"message": null}`** — traitez-le comme « compte existant » ;
+**Effets serveur** : validation du mail (format + unicité), création de l'utilisateur
+(nickname initial = mail), mot de passe généré (15 car.) **envoyé par e-mail** (titre
+`CodEbara`, logo œuf inline, identifiants en clair + consigne « changez ce mot de passe
+au plus vite depuis la mairie ») si `DEBUG=False` ; retourne les deux tokens.
+**Limites** (vérifiées dans le code, état 2026-10-30) :
+- le mail doit être de forme `local@domaine.tld` (`isMailValid`) → sinon
+  **403 `{"message": "Forbidden"}`** ;
+- mail déjà utilisé → **403 `{"message": "Forbidden"}`** (côté client, proposez
+  l'écran de connexion ou « mot de passe oublié ») ;
 - body manquant ou `mail` absent : 400 `{"message": "Invalid Request with body given
   for: method: POST on route:/user"}` ;
 - pas de protection anti-spam.
@@ -449,6 +454,46 @@ Scan / Home / Profile / Arena de l'app.
   `./html/` est servi (cf. §2), donc ces images ne sont pas téléchargeables via HTTP.
   À valider au propriétaire : soit une route dédiée pour servir `<baseloc>/<ressources>`,
   soit embarquer les images dans l'app (cf. §12).
+
+### 5.9 `POST /user/renew-password` — mot de passe oublié / renouvellement (sans tokens)
+
+Ajouté le 2026-10-30. À utiliser quand l'utilisateur est **connecté nulle part** (session
+morte et mot de passe perdu) — c'est l'écran « mot de passe oublié » de l'app.
+
+**Requête**
+
+```
+POST /user/renew-password HTTP/1.1
+Content-Type: application/json
+
+{"mail": "joueur@exemple.fr"}
+```
+
+**Réponse (succès)**
+
+```json
+{"renewed": true}
+```
+
+**Effets serveur** :
+- validation de la **forme** du mail → sinon `403 {"message": "Forbidden"}` ;
+- nouveau mot de passe aléatoire (15 car.) écrit en base
+  (`SHA2(CONCAT(mail, clair), 256)`) + `last_action` notifié ;
+- e-mail `CodEbara` avec le **nouveau mot de passe en clair** et le contexte
+  « renouvellement — votre ancien mot de passe ne fonctionne plus » (même gabarit que
+  l'inscription) ;
+- la session en cours, s'il y en a une, reste valable (les tokens ne dépendent pas du
+  mot de passe) ; seul l'authentification login/pass utilise le nouveau mot de passe.
+
+**Échecs (tous → 403 `{"message": "Forbidden"}`)** : mail mal formé, **ou** compte
+inconnu — délibérément la même réponse pour les deux cas (pas d'oracle d'existence de
+comptes) : côté client, affichez « si ce compte existe, un mail vient d'être envoyé »
+et laissez la réponse de succès masquer la distinction.
+
+**À noter** : la réponse de succès **ne contient pas** `API_REQUEST_TOKEN` (aucun token
+n'est émis via cette route) — ne déclenchez pas votre rotation sur cet appel. En mode
+`DEBUG=True` serveur, le mail n'est pas envoyé et le mot de passe est imprimé dans le
+log du serveur.
 
 ---
 
@@ -777,6 +822,8 @@ reste du tirage est identique par construction (déterminisme de la saison).
 - [ ] Affichage : `front.png`/`back.png` bruts, stats depuis `datas.json`,
       **rendu libre si deck.json (optionnel, tolérant aux clés manquantes)**
 - [ ] Cache collection + `GET /card` de synchronisation au démarrage
+- [ ] Écran « mot de passe oublié » : `POST /user/renew-password` (§5.9, message
+      neutre pour ne pas révéler si le compte existe)
 - [ ] Intégrer `PUT /card/name` avec garde-fou anti tar.xz (§5.7)
 - [ ] `GET /season` : parsing opportuniste, layout par défaut si absent
 - [ ] Tests de recette : §8.1 (curl) reproductibles + intégration app
@@ -788,16 +835,23 @@ reste du tirage est identique par construction (déterminisme de la saison).
 | Date | Événement |
 |---|---|
 | 2026-10-30 | Contrat établi d'après le code serveur de pyCodebara2 + `endpoints.odt` ; décision owner : **ZIP définitif** pour `.cdz` (renommage serveur à aligner) |
+| 2026-10-30 | Authentification mail de bienvenue : SMTP configuré via `.env` (`SMTP_*`), mail HTML `CodEbara` (template `codebara/templates/newUserMail.html`) envoyé au `POST /user` réussi ; en `DEBUG=True`, mot de passe imprimé dans le log serveur |
+| 2026-10-30 | Nouveau `POST /user/renew-password` (mot de passe oublié) ; `POST /user` refuse mail mal formé ou compte existant avec **403 Forbidden** ; colonne `user.last_action` (DATETIME, ON UPDATE) — cf. §5.9 |
 | à venir | `GET /user`, `PUT /user`, `GET /season/check`, mode génération asynchrone, tables de sécurité anti-rejeu, HTTPS |
 
 ---
 
 ## 12. À valider / demander au propriétaire du serveur
 
-1. **DEBUG=True bloque le mot de passe** : en configuration de dev, `POST /user` ne
-   renvoie pas le mot de passe ni d'e-mail. Pour tester le login/pass de nouveaux
-   comptes, demander au serveur (a) une réponse avec le mot de passe quand `DEBUG`,
-   ou (b) un mode d'insertion manuelle. *Ne pas* implémenter un contournement client.
+1. **DEBUG=True bloque les mails** (état 2026-10-30) : en configuration de
+   développement, `POST /user` et `POST /user/renew-password` n'envoient pas d'e-mail ;
+   le mot de passe généré est **imprimé dans le log du serveur**
+   (`[DEBUG] Mail de ... non envoyé...`). Pour recruter un compte de test : lire ce log,
+   ou demander à l'owner la vraie route (envoi réel avec SMTP configuré).
+   *Ne pas* implémenter de contournement client. Le changement de mot de passe visé par
+   le mail (« mairie » = écran Profil) suppose `PUT /user` — pas encore implémenté côté
+   serveur ; en attendant, le renouvellement (`POST /user/renew-password`) est le seul
+   chemin serveur pour redonner un mot de passe.
 2. **HTTPS / proxy** : actuellement `http://` — éviter d'envoyer les tokens sur du réseau
    non confidentiel hors dev ; demander un reverse-proxy TLS au besoin.
 3. **Corps d'erreur JSON** (optionnel mais recommandé) : le texte brut rend la

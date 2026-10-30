@@ -239,13 +239,31 @@ export async function creerCompte(mailExact: string): Promise<void> {
       body: JSON.stringify({ mail: mailExact }),
     });
   } catch (erreur) {
-    // Contrat §5.1 : mail déjà utilisé → HTTP 500 {"message": null}, converti
-    // en « Erreur serveur inconnue » par lireJson.
-    if (erreur instanceof ErreurApi && erreur.message === 'Erreur serveur inconnue') {
-      throw new ErreurApi('Ce mail est déjà utilisé');
+    // Contrat §4 : « métier refusé » → 403 {"message":"Forbidden"}, cas
+    // volontairement confondus (mail mal formé / compte déjà existant).
+    if (erreur instanceof ErreurApi && erreur.message === 'Forbidden') {
+      throw new ErreurApi('Création refusée : vérifie cette adresse (elle est peut-être déjà utilisée)');
     }
     throw erreur;
   }
+}
+
+// ─── Mot de passe oublié (§5.9 — POST /user/renew-password, sans tokens) ────
+
+// Nouveau mot de passe aléatoire place en base + envoyé par e-mail. La réponse
+// de succès est {"renewed": true} SANS API_REQUEST_TOKEN : aucune rotation à
+// déclencher sur cet appel. Échec métier = 403 {"message":"Forbidden"} — mail
+// mal formé OU compte inconnu, volontairement indiscernables : côté écran,
+// afficher « si ce compte existe, un mail vient d'être envoyé » pour ne pas
+// révéler l'existence des comptes. À noter : avec le serveur en DEBUG=True,
+// le mail n'est pas envoyé (mot de passe imprimé dans son log).
+export async function renouvelerMotDePasse(mailExact: string): Promise<void> {
+  await avecDelai({
+    url: `${URL_BASE}/user/renew-password`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mail: mailExact }),
+  });
 }
 
 // ─── Cartes (§5.4 – GET /card : liste de l'utilisateur connecté) ────────────

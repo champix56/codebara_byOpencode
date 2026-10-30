@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { router, Stack } from 'expo-router';
 import Constants from 'expo-constants';
-import { authentifierParLogin, creerCompte } from '../services/api';
+import { authentifierParLogin, creerCompte, renouvelerMotDePasse, ErreurApi } from '../services/api';
 import { useAppDispatch } from '../store/hooks';
 import { UTILISATEUR_DEBUG, seConnecter } from '../store/utilisateur';
 
@@ -23,10 +23,12 @@ import { UTILISATEUR_DEBUG, seConnecter } from '../store/utilisateur';
 const MODE_DEBUG =
   process.env.EXPO_PUBLIC_DEBUG === 'true' || Constants.expoConfig?.extra?.debug === true;
 
-type Mode = 'login' | 'signup';
+type Mode = 'login' | 'signup' | 'oublie';
 
-// La même fenêtre sert à la connexion ET à la création de compte :
-// le lien en bas bascule d'un mode à l'autre.
+// La même fenêtre sert à la connexion, à la création de compte ET au
+// renouvellement du mot de passe (lien « Mot de passe oublié ? ») :
+// les liens en bas basculent entre les trois. Le mail saisi est conservé
+// d'un mode à l'autre.
 export default function ConnexionScreen() {
   const [mode, setMode] = useState<Mode>('login');
   const [identifiant, setIdentifiant] = useState('');
@@ -38,6 +40,7 @@ export default function ConnexionScreen() {
   // Connexion : mot de passe haché côté client (§3.2 du contrat : sha256Hex(mail_exact + clair)) ;
   // Création : mail seul (le serveur génère le mot de passe et l'envoie par
   // e-mail — config serveur DEBUG=False ; en dev rien n'est envoyé, §12.1).
+  // Mot de passe oublié : mail seul → POST /user/renew-password (§5.9).
   const peutSoumettre =
     !enCours &&
     identifiant.trim().length > 0 &&
@@ -64,7 +67,7 @@ export default function ConnexionScreen() {
           }),
         );
         router.replace('/principal');
-      } else {
+      } else if (mode === 'signup') {
         await creerCompte(mailExact);
         // Succès : le serveur a créé le compte ; le mot de passe arrive par
         // e-mail (quand la config serveur l'envoie — cf. §5.1 / §12.1).
@@ -75,6 +78,30 @@ export default function ConnexionScreen() {
         setIdentifiant('');
         setMotDePasse('');
         setMode('login');
+      } else {
+        // Mot de passe oublié — contrat §5.9 : le serveur renvoie le NEUF par
+        // e-mail ({"renewed": true}, aucun token émis). Le 403 « Forbidden » est
+        // AMBIGU par conception (mail mal formé ou compte inconnu) → même
+        // message : ne jamais révéler l'existence des comptes.
+        try {
+          await renouvelerMotDePasse(mailExact);
+          setMessage({
+            texte: 'Si ce compte existe, un courriel avec le nouveau mot de passe vient de partir.',
+            erreur: false,
+          });
+        } catch (erreur) {
+          const libelle = (erreur as Error).message;
+          if (erreur instanceof ErreurApi && libelle === 'Forbidden') {
+            setMessage({
+              texte: 'Si ce compte existe, un courriel avec le nouveau mot de passe vient de partir.',
+              erreur: false,
+            });
+          } else {
+            throw erreur;
+          }
+        }
+        setMotDePasse('');
+        setMode('login');
       }
     } catch (erreur) {
       setMessage({ texte: (erreur as Error).message, erreur: true });
@@ -83,8 +110,8 @@ export default function ConnexionScreen() {
     }
   };
 
-  const basculerMode = () => {
-    setMode(mode === 'login' ? 'signup' : 'login');
+  const basculerMode = (cible: Mode) => {
+    setMode(cible);
     setMessage(null);
   };
 
@@ -111,7 +138,11 @@ export default function ConnexionScreen() {
         />
         <Text style={styles.title}>Bienvenue sur codEbara</Text>
         <Text style={styles.subtitle}>
-          {mode === 'login' ? 'Connecte-toi à ton compte' : 'Crée ton compte — le mot de passe t’arrivera par e-mail'}
+          {mode === 'login'
+            ? 'Connecte-toi à ton compte'
+            : mode === 'signup'
+              ? 'Crée ton compte — le mot de passe t’arrivera par e-mail'
+              : 'Saisis ton e-mail pour en recevoir un nouveau'}
         </Text>
 
         <View style={styles.form}>
@@ -152,7 +183,11 @@ export default function ConnexionScreen() {
             disabled={!peutSoumettre}
           >
             <Text style={styles.buttonLabel}>
-              {mode === 'login' ? 'Connexion' : 'Créer mon compte'}
+              {mode === 'login'
+                ? 'Connexion'
+                : mode === 'signup'
+                  ? 'Créer mon compte'
+                  : 'Recevoir un nouveau mot de passe'}
             </Text>
           </Pressable>
 
@@ -171,11 +206,22 @@ export default function ConnexionScreen() {
             </Text>
           )}
 
-          <Pressable hitSlop={8} onPress={basculerMode}>
+          {mode !== 'oublie' && (
+            <Pressable hitSlop={6} onPress={() => basculerMode('oublie')} accessibilityLabel="Mot de passe oublié">
+              <Text style={styles.lienOublie}>Mot de passe oublié ?</Text>
+            </Pressable>
+          )}
+
+          <Pressable
+            hitSlop={8}
+            onPress={() => basculerMode(mode === 'oublie' ? 'login' : mode === 'signup' ? 'login' : 'signup')}
+          >
             <Text style={styles.link}>
               {mode === 'login'
                 ? 'Pas encore de compte ? Créer un compte'
-                : 'Déjà un compte ? Se connecter'}
+                : mode === 'signup'
+                  ? 'Déjà un compte ? Se connecter'
+                  : 'Je l’ai retrouvé — me connecter'}
             </Text>
           </Pressable>
         </View>
@@ -277,6 +323,13 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   link: {
+    fontSize: 14,
+    color: '#2e7d32',
+    textAlign: 'center',
+    marginTop: 10,
+    textDecorationLine: 'underline',
+  },
+  lienOublie: {
     fontSize: 14,
     color: '#2e7d32',
     textAlign: 'center',

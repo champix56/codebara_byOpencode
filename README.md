@@ -1,6 +1,6 @@
 # codEbara
 
-Application mobile (iOS / Android) et web **Expo / React Native**. Une carte plein écran à zones interactives ouvre des fenêtres dédiées : **usine** (scanneur de codes-barres), **maison**, **boutique**, **arène** ; écran de connexion avec un contournement de débogage, bandeau publicitaire et menu latéral de navigation.
+Application mobile (iOS / Android) et web **Expo / React Native**. Une carte plein écran à zones interactives ouvre des fenêtres dédiées : **usine** (scanneur de codes-barres), **maison** (collection de cartes), **mairie** (informations personnelles), **boutique**, **arène** ; écran de connexion branché sur le **serveur pyCodebara2**, bandeau publicitaire et menu latéral de navigation.
 
 ## Stack
 
@@ -12,6 +12,7 @@ Application mobile (iOS / Android) et web **Expo / React Native**. Une carte ple
 | Expo Router | file-based routing | Navigation (`src/app/` = routes) |
 | Redux Toolkit | 2.13 | État global (tranche utilisateur **persistée** via redux-persist + AsyncStorage) |
 | expo-camera | ~58 | Scanneur de codes-barres (EAN-8, EAN-13, UPC-A, UPC-E) |
+| expo-crypto | ~58 | SHA-256 du mot de passe (contrat serveur §3.2) + polyfill `crypto` (devtools natif) |
 
 ## Démarrage
 
@@ -29,6 +30,19 @@ npm run android           # émulateur Android
 ```
 
 > Après l'ajout ou la modification d'un config plugin (ex. `expo-camera` dans `app.json`), régénérer le natif : `npx expo run:ios` / `npx expo run:android` (ou un build EAS).
+
+## Serveur pyCodebara2
+
+Contrat : [`/home/champix/projets/pyCodebara2/docs/integration-client.md`](../pyCodebara2/docs/integration-client.md).
+
+- Base URL via **`EXPO_PUBLIC_API_URL`** (défaut `http://localhost:8080`) :
+  - web dev : CORS serveur autorise `localhost:8081` / `5173` ;
+  - émulateur Android : `EXPO_PUBLIC_API_URL=http://10.0.2.2:8080 npx expo start` ;
+  - téléphone physique : `EXPO_PUBLIC_API_URL=http://<IP LAN du PC>:8080 npx expo start`.
+- Authentification : `GET /user/auth` (header `datas`, mot de passe haché `SHA256(mail_exact + clair)` en client, §3.2) → données utilisateur + **double token rotatif** (`API_TOKEN` long + `API_REQUEST_TOKEN` une-requête) — les deux sont **persistés** dans la tranche utilisateur (reprise de session au lancement via l'écran de chargement) ; le `API_REQUEST_TOKEN` est re-émis à chaque succès de route protégée (rotation automatique dans `src/services/api.ts`, appels sérialisés car le serveur n'accepte qu'une requête par couple).
+- Création de compte : `POST /user {"mail"}` — le mot de passe est généré et **envoyé par e-mail par le serveur** (désactivé si le serveur tourne en `DEBUG=True`, contrat §12.1).
+- La **modification** du profil (nickname) est pour l'instant locale (tranche persistée, fenêtre mairie) : `PUT /user` n'existe pas encore côté serveur (contrat §9.3).
+- Bouton debug : le compte GOD chargé n'a **pas** de session — appels protégés inertes tant qu'aucune vraie connexion n'a eu lieu.
 
 ## Débogage (DEBUG)
 
@@ -68,8 +82,9 @@ node scripts/extraire-carte-svg.mjs
 src/
 ├── app/          # Routes Expo Router (un fichier = un écran)
 ├── components/   # carte-interactive, bandeau-pub, menu-lateral, usine-ecran(.web)…
+├── services/     # api.ts — client HTTP serveur pyCodebara2 (auth, rotation, cartes)
 ├── store/        # Redux : store + tranche utilisateur persistée + hooks typés
-├── utils/        # Règles métier pures (codes-bar : validation EAN/UPC)
+├── utils/        # Règles métier pures (codes-bar, mot de passe SHA-256)
 └── data/         # carte.ts (généré) — géométrie + zones taponables
 docs/             # architecture, conventions, conventions écrans (docs/screens/*)
 scripts/          # outils de génération

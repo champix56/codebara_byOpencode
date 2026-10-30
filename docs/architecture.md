@@ -31,7 +31,8 @@ codEbara/
 │   │   ├── principal.tsx# Fenêtre principale — carte SVG plein écran — route /principal
 │   │   ├── usine.tsx    # Scanneur de codes-barres (natif) / formulaire (web) — route /usine
 │   │   └── maison.tsx / boutique.tsx / arene.tsx  # Fenêtres vierges
-│   ├── components/      # carte-interactive, bandeau-pub, menu-lateral, fenetre-vierge, usine-ecran(.web)
+│   ├── components/      # carte-interactive, bandeau-pub, menu-lateral, fenetre-vierge, usine-ecran(.web), maison-ecran, mairie-ecran
+│   ├── services/        # api.ts — client HTTP du serveur pyCodebara2 (auth, cartes, rotation)
 │   ├── store/           # Redux Toolkit — tranche utilisateur persistée (store, utilisateur, hooks)
 │   ├── utils/           # Règles métier pures (codes-bar.ts : validation EAN/UPC)
 │   └── data/            # Données de l'app (carte.ts généré)
@@ -66,7 +67,8 @@ Flux : `/` exécute ses tâches puis `router.replace('/login')` — l'écran de 
 ## État global (Redux Toolkit)
 
 - `src/store/store.ts` — `store` + `persistor` : persistance **AsyncStorage** (= localStorage sur le web) via redux-persist, clé `racine`, `whitelist: ['utilisateur']` — seule la tranche utilisateur survit au redémarrage.
-- `src/store/utilisateur.ts` — tranche `utilisateur` : `idUser`, `nickname`, `hash`, `token`, `mail` ; actions `seConnecter` / `seDeconnecter` / `modifierProfil` (payload partiel nickname/hash — formulaire de la fenêtre maison) ; export `UTILISATEUR_DEBUG` (bypass debug de la connexion : id `-9999`, nickname `GOD`, hash `null`, token `-1`, mail `codebara@free.fr`).
+- `src/store/utilisateur.ts` — tranche `utilisateur` conforme au serveur pyCodebara2 : `idUser` (`id`), `nickname`, `mail`, `amount`, `hash` (champ interne opaque), **`apiToken`** (`API_TOKEN` long) + **`requestToken`** (`API_REQUEST_TOKEN` une-requête, rotatif) ; actions `seConnecter` / `renouvelerRequestToken` (rotation §3.3) / `modifierProfil` (payload partiel — mairie) / `seDeconnecter` ; export `UTILISATEUR_DEBUG` (bypass debug : id `-9999`, nickname `GOD`, hash `null`, tokens `null`, mail `codebara@free.fr`). Le mot de passe clair n'est jamais stocké (envoi : `sha256Hex(mail_exact + motDePasseClair)`, §3.2 — `src/utils/hash.ts`).
+- `src/services/api.ts` — client HTTP du serveur (contrat : `/home/champix/projets/pyCodebara2/docs/integration-client.md`) : auth login/pass (`GET /user/auth`, données + les **deux** tokens ré-émis — §5.2a), auth par tokens (reprise de session, données seules — §5.2b), `POST /user` (création, mail seul — §5.1), `GET /card` (liste des cartes du joueur — §5.4) ; appels protégés **sérialisés** (file d'attente : le couple de tokens ne peut servir qu'une requête — §9.1), **rotation** du `API_REQUEST_TOKEN` sur tout succès de route protégée (§3.3), **mort de session** (« Invalid REQUEST TOKEN ») = reset de la tranche + purge de la persistance + `/login`, timeout 10 s (contrat §2), base URL `EXPO_PUBLIC_API_URL` (défaut `http://localhost:8080`).
 - `src/store/hooks.ts` — hooks typés `useAppDispatch` / `useAppSelector` : à utiliser partout, jamais les hooks bruts de react-redux.
 - Montage : `Provider` + `PersistGate` dans `src/app/_layout.tsx`.
 - Redux DevTools : web → extension navigateur (RTK l'active par défaut) ; natif en dev → `@redux-devtools/remote` branché sur le store (`src/store/store.ts`, chemin `__DEV__` non-web), moniteur `npx --yes @redux-devtools/cli redux-devtools` sur le port 8000 et, pour un téléphone physique, `EXPO_PUBLIC_DEVTOOLS_HOST=<IP LAN>` au démarrage. Hermes n'ayant pas le global `crypto` (Web Crypto) requis par `uuid` — transport devtools via socketcluster-client — le store installe un polyfill `global.crypto` via `expo-crypto` **avant** le `require('@redux-devtools/remote')`.

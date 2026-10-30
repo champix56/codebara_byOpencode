@@ -6,11 +6,12 @@ Un fichier Markdown par écran (« fenêtre ») de l'application. Règle constan
 
 | Fichier | Écran | Dernière mise à jour |
 | --- | --- | --- |
-| [chargement.md](./chargement.md) | Écran de chargement (route `/`) — 2 tâches factices 2 s puis redirection | 2026-10-25 |
-| [connexion.md](./connexion.md) | Connexion / création de compte (route `/login`) — en attendant le serveur : bouton debug et entrée directe | 2026-10-30 |
+| [chargement.md](./chargement.md) | Écran de chargement (route `/`) — barre 4 s + reprise de session par tokens (serveur pyCodebara2) | 2026-10-31 |
+| [connexion.md](./connexion.md) | Connexion / création de compte (route `/login`) — vrai serveur (`GET /user/auth`, `POST /user`) + bouton debug | 2026-10-31 |
 | [principal.md](./principal.md) | Fenêtre principale (route `/principal`) — carte plein écran, zones data-action taponables, bandeau publicitaire bas | 2026-10-30 |
 | [usine.md](./usine.md) | Usine (route `/usine`) — scanneur de codes-barres EAN-8/13, UPC-A/UPC-E + UPC-B (caméra natif, saisie manuelle web) | 2026-10-30 |
-| [maison.md](./maison.md) | Maison (route `/maison`) — formulaire du compte : modification nickname + mot de passe (tranche utilisateur persistée) | 2026-10-30 |
+| [maison.md](./maison.md) | Maison (route `/maison`) — liste des cartes du joueur (`GET /card`), tirer-pour-actualiser | 2026-10-31 |
+| [mairie.md](./mairie.md) | Mairie (route `/mairie`) — informations personnelles : nickname modifiable (persisté), mot de passe inactif (endpoint serveur à venir) | 2026-10-31 |
 | [boutique.md](./boutique.md) | Boutique (route `/boutique`) — fenêtre vierge (retour discret) | 2026-10-30 |
 | [arene.md](./arene.md) | Arène (route `/arene`) — fenêtre vierge (retour discret) | 2026-10-30 |
 

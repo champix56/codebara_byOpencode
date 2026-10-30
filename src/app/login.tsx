@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { router, Stack } from 'expo-router';
 import Constants from 'expo-constants';
+import { authentifierParLogin, creerCompte } from '../services/api';
 import { useAppDispatch } from '../store/hooks';
 import { UTILISATEUR_DEBUG, seConnecter } from '../store/utilisateur';
 
@@ -30,22 +31,66 @@ export default function ConnexionScreen() {
   const [mode, setMode] = useState<Mode>('login');
   const [identifiant, setIdentifiant] = useState('');
   const [motDePasse, setMotDePasse] = useState('');
+  const [message, setMessage] = useState<{ texte: string; erreur: boolean } | null>(null);
+  const [enCours, setEnCours] = useState(false);
   const dispatcher = useAppDispatch();
-  const canSubmit = identifiant.trim().length > 0 && motDePasse.length > 0;
 
-  const soumettre = () => {
-    // TODO: brancher sur l'authentification réelle
-    // (mode 'login' -> connexion, mode 'signup' -> création de compte).
-    // En attendant le serveur : entrer dans l'application sans vérification.
-    if (canSubmit) {
-      router.replace('/principal');
+  // Connexion : mot de passe haché côté client (§3.2 du contrat : sha256Hex(mail_exact + clair)) ;
+  // Création : mail seul (le serveur génère le mot de passe et l'envoie par
+  // e-mail — config serveur DEBUG=False ; en dev rien n'est envoyé, §12.1).
+  const peutSoumettre =
+    !enCours &&
+    identifiant.trim().length > 0 &&
+    (mode === 'login' ? motDePasse.length > 0 : identifiant.includes('@'));
+
+  const soumettre = async () => {
+    if (!peutSoumettre) return;
+    setEnCours(true);
+    setMessage(null);
+    const mailExact = identifiant.trim();
+    try {
+      if (mode === 'login') {
+        const donnees = await authentifierParLogin(mailExact, motDePasse);
+        // Données serveur + les deux tokens ré-émis → tranche persistée.
+        dispatcher(
+          seConnecter({
+            idUser: donnees.id,
+            nickname: donnees.nickname,
+            mail: donnees.mail,
+            amount: donnees.amount,
+            hash: donnees.hash,
+            apiToken: donnees.apiToken,
+            requestToken: donnees.requestToken,
+          }),
+        );
+        router.replace('/principal');
+      } else {
+        await creerCompte(mailExact);
+        // Succès : le serveur a créé le compte ; le mot de passe arrive par
+        // e-mail (quand la config serveur l'envoie — cf. §5.1 / §12.1).
+        setMessage({
+          texte: 'Compte créé. Le mot de passe t’arrive par e-mail si le serveur est configuré pour l’envoyer.',
+          erreur: false,
+        });
+        setIdentifiant('');
+        setMotDePasse('');
+        setMode('login');
+      }
+    } catch (erreur) {
+      setMessage({ texte: (erreur as Error).message, erreur: true });
+    } finally {
+      setEnCours(false);
     }
   };
 
-  const basculerMode = () => setMode(mode === 'login' ? 'signup' : 'login');
+  const basculerMode = () => {
+    setMode(mode === 'login' ? 'signup' : 'login');
+    setMessage(null);
+  };
 
   // Bouton debug : saute l'authentification, charge le compte GOD dans la tranche
-  // utilisateur persistante puis ouvre la fenêtre principale.
+  // utilisateur persistante puis ouvre la fenêtre principale (aucun token serveur :
+  // les appels protégés resteront inertes tant qu'une vraie session n'existe pas).
   const passerAuthentification = () => {
     dispatcher(seConnecter(UTILISATEUR_DEBUG));
     router.replace('/principal');
@@ -66,36 +111,45 @@ export default function ConnexionScreen() {
         />
         <Text style={styles.title}>Bienvenue sur codEbara</Text>
         <Text style={styles.subtitle}>
-          {mode === 'login' ? 'Connecte-toi à ton compte' : 'Crée ton compte'}
+          {mode === 'login' ? 'Connecte-toi à ton compte' : 'Crée ton compte — le mot de passe t’arrivera par e-mail'}
         </Text>
 
         <View style={styles.form}>
           <TextInput
             style={styles.input}
-            placeholder="Login ou username"
+            placeholder="Email"
             placeholderTextColor="#9ca3af"
             autoCapitalize="none"
             autoCorrect={false}
+            keyboardType="email-address"
             value={identifiant}
-            onChangeText={setIdentifiant}
+            onChangeText={(texte) => {
+              setIdentifiant(texte);
+              setMessage(null);
+            }}
           />
-          <TextInput
-            style={styles.input}
-            placeholder="Mot de passe"
-            placeholderTextColor="#9ca3af"
-            secureTextEntry
-            value={motDePasse}
-            onChangeText={setMotDePasse}
-          />
+          {mode === 'login' && (
+            <TextInput
+              style={styles.input}
+              placeholder="Mot de passe"
+              placeholderTextColor="#9ca3af"
+              secureTextEntry
+              value={motDePasse}
+              onChangeText={(texte) => {
+                setMotDePasse(texte);
+                setMessage(null);
+              }}
+            />
+          )}
 
           <Pressable
             style={({ pressed }) => [
               styles.button,
-              !canSubmit && styles.buttonDisabled,
-              pressed && canSubmit && styles.buttonPressed,
+              !peutSoumettre && styles.buttonDisabled,
+              pressed && peutSoumettre && styles.buttonPressed,
             ]}
             onPress={soumettre}
-            disabled={!canSubmit}
+            disabled={!peutSoumettre}
           >
             <Text style={styles.buttonLabel}>
               {mode === 'login' ? 'Connexion' : 'Créer mon compte'}
@@ -109,6 +163,12 @@ export default function ConnexionScreen() {
             >
               <Text style={styles.buttonDebugLabel}>Debug : passer l’authentification</Text>
             </Pressable>
+          )}
+
+          {message && (
+            <Text style={message.erreur ? styles.messageErreur : styles.messageSucces} numberOfLines={3}>
+              {message.texte}
+            </Text>
           )}
 
           <Pressable hitSlop={8} onPress={basculerMode}>
@@ -203,6 +263,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#ffffff',
+  },
+  messageSucces: {
+    fontSize: 14,
+    color: '#2e7d32',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  messageErreur: {
+    fontSize: 14,
+    color: '#c62828',
+    textAlign: 'center',
+    marginTop: 12,
   },
   link: {
     fontSize: 14,

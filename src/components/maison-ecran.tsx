@@ -1,145 +1,107 @@
-import { useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { type ProfilPartiel, modifierProfil } from '../store/utilisateur';
-import { calculerEmpreinte } from '../utils/hash';
+import { useCallback, useEffect, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ErreurSession, listerCartes, type CarteListee } from '../services/api';
+import { useAppSelector } from '../store/hooks';
 
-// Fenêtre maison : formulaire des informations du compte courant. Le nickname
-// et le mot de passe sont modifiés directement dans la tranche utilisateur
-// persistée (placeholder local jusqu'au branchement serveur).
+// Fenêtre maison : liste des cartes en possession du joueur — GET /card du
+// serveur pyCodebara2 (contrat §5.4) : id, checksum, puissance, santé, attaque.
+// Le rendu graphique et le nom viendront du fichier .cdz (perso.png / datas.json,
+// GET /card/{id}) — ici, la liste brute fait foi pour la collection.
+type EtatListe =
+  | { phase: 'chargement' }
+  | { phase: 'pret' }
+  | { phase: 'vide' }
+  | { phase: 'sans-session' }
+  | { phase: 'erreur'; message: string };
+
 export default function MaisonEcran() {
-  const dispatcher = useAppDispatch();
-  const utilisateur = useAppSelector((etat) => etat.utilisateur);
+  const { apiToken, requestToken } = useAppSelector((etat) => etat.utilisateur);
+  const [etat, definirEtat] = useState<EtatListe>({ phase: 'chargement' });
+  const [cartes, definirCartes] = useState<CarteListee[]>([]);
+  const [rafraichit, definirRafraichit] = useState(false);
 
-  const [nickname, setNickname] = useState(utilisateur.nickname);
-  const [motDePasse, setMotDePasse] = useState('');
-  const [confirmation, setConfirmation] = useState('');
-  const [message, setMessage] = useState<{ texte: string; erreur: boolean } | null>(null);
-  const [enEnregistrement, setEnEnregistrement] = useState(false);
-
-  const mdpModifie = motDePasse.length > 0;
-  const confirmationDivergente =
-    mdpModifie && confirmation.length > 0 && motDePasse !== confirmation;
-  const peutSoumettre =
-    !enEnregistrement &&
-    nickname.trim().length > 0 &&
-    (!mdpModifie || (confirmation.length > 0 && motDePasse === confirmation));
-
-  // Enregistre le profil dans la tranche persistée : hash calculé localement
-  // (SHA-256) uniquement si un nouveau mot de passe est saisi — champs vides =
-  // conservation de l'empreinte actuelle.
-  const enregistrer = async () => {
-    if (!peutSoumettre) return;
-    setEnEnregistrement(true);
-    try {
-      const changements: ProfilPartiel = { nickname: nickname.trim() };
-      if (mdpModifie) {
-        changements.hash = await calculerEmpreinte(motDePasse);
+  const charger = useCallback(
+    async (modeRafraichit: boolean) => {
+      if (!apiToken || !requestToken) {
+        definirEtat({ phase: 'sans-session' });
+        return;
       }
-      dispatcher(modifierProfil(changements));
-      setMotDePasse('');
-      setConfirmation('');
-      setMessage({ texte: 'Modifications enregistrées.', erreur: false });
-    } catch {
-      setMessage({ texte: 'Échec du calcul de l’empreinte.', erreur: true });
-    } finally {
-      setEnEnregistrement(false);
-    }
-  };
+      definirEtat({ phase: 'chargement' });
+      if (modeRafraichit) definirRafraichit(true);
+      try {
+        const liste = await listerCartes();
+        definirCartes(liste);
+        definirEtat(liste.length === 0 ? { phase: 'vide' } : { phase: 'pret' });
+      } catch (erreur) {
+        if (erreur instanceof ErreurSession) {
+          // Session morte : le service a déjà réinitialisé le store et
+          // déclenché la navigation vers la connexion — rien à afficher.
+          return;
+        }
+        definirEtat({ phase: 'erreur', message: (erreur as Error).message });
+      } finally {
+        definirRafraichit(false);
+      }
+    },
+    [apiToken, requestToken],
+  );
+
+  useEffect(() => {
+    // Un seul chargement à l'ouverture (les appels protégés sont sérialisés
+    // par le service — le couple de tokens ne peut être utilisé qu'une fois).
+    (async () => charger(false))();
+  }, [charger]);
 
   return (
-    <KeyboardAvoidingView
+    <ScrollView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      contentContainerStyle={styles.contenu}
+      refreshControl={
+        <RefreshControl refreshing={rafraichit} onRefresh={() => charger(true)} />
+      }
     >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <Text style={styles.premierTitre}>Mon compte</Text>
-        <Text style={styles.sousTitre}>Consulte et modifie tes informations</Text>
+      <Text style={styles.titre}>Mes cartes</Text>
 
-        <Text style={[styles.infoTexte, styles.label]} accessibilityLabel="Compte">
-          Mail&nbsp;: {utilisateur.mail || '—'}
+      {etat.phase === 'sans-session' && (
+        <Text style={styles.texteState}>
+          Connecte-toi au serveur (authentification par mail / mot de passe) pour
+          voir la collection enregistrée.
         </Text>
-        <Text style={[styles.infoTexte, styles.label]}>
-          Identifiant&nbsp;: {utilisateur.idUser === null ? '—' : `user #${utilisateur.idUser}`}
-        </Text>
+      )}
 
-        <View style={styles.form}>
-          <Text style={styles.label}>Nickname</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Login ou username"
-            placeholderTextColor="#9ca3af"
-            autoCapitalize="none"
-            autoCorrect={false}
-            value={nickname}
-            onChangeText={(texte) => {
-              setNickname(texte);
-              setMessage(null);
-            }}
-            returnKeyType="done"
-          />
-          <Text style={styles.label}>Nouveau mot de passe</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="••••••••"
-            placeholderTextColor="#9ca3af"
-            secureTextEntry
-            value={motDePasse}
-            onChangeText={(texte) => {
-              setMotDePasse(texte);
-              setMessage(null);
-            }}
-            returnKeyType="done"
-          />
-          <Text style={styles.label}>Confirmation du mot de passe</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="••••••••"
-            placeholderTextColor="#9ca3af"
-            secureTextEntry
-            value={confirmation}
-            onChangeText={(texte) => {
-              setConfirmation(texte);
-              setMessage(null);
-            }}
-            returnKeyType="done"
-          />
-          <Text style={styles.astuce}>
-            Laissez les champs de mot de passe vides pour conserver l’actuel.
-          </Text>
-          {confirmationDivergente && (
-            <Text style={styles.erreur}>Les mots de passe ne correspondent pas.</Text>
-          )}
+      {etat.phase === 'chargement' && <Text style={styles.texteState}>Chargement de la collection…</Text>}
 
+      {etat.phase === 'vide' && <Text style={styles.texteState}>Aucune carte encore — passe à l’usine scanner un code-barres !</Text>}
+
+      {etat.phase === 'erreur' && (
+        <View style={styles.blocErreur}>
+          <Text style={styles.erreur}>{etat.message}</Text>
           <Pressable
-            style={({ pressed }) => [
-              styles.bouton,
-              !peutSoumettre && styles.boutonDesactive,
-              pressed && peutSoumettre && styles.boutonAppuye,
-            ]}
-            onPress={enregistrer}
-            disabled={!peutSoumettre}
+            style={({ pressed }) => [styles.boutonReessayer, pressed && styles.boutonAppuye]}
+            onPress={() => charger(false)}
           >
-            <Text style={styles.boutonTexte}>Enregistrer</Text>
+            <Text style={styles.boutonTexte}>Réessayer</Text>
           </Pressable>
-
-          {message && (
-            <Text style={message.erreur ? styles.erreur : styles.normalMessage}>
-              {message.texte}
-            </Text>
-          )}
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      )}
+
+      {etat.phase === 'pret' && (
+        <View style={styles.liste}>
+          {cartes.map((carte) => (
+            <View key={carte.id} style={styles.carte}>
+              <Text style={styles.carteId}>#&nbsp;{carte.id}</Text>
+              <Text style={styles.carteStats}>
+                Puissance&nbsp;: {carte.cardpower ?? '—'}&nbsp; Santé&nbsp;:{' '}
+                {carte.health ?? '—'}&nbsp; Attaque&nbsp;: {carte.attack ?? '—'}
+              </Text>
+              <Text style={styles.carteHash} numberOfLines={1}>
+                {carte.cardHash}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </ScrollView>
   );
 }
 
@@ -148,82 +110,72 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff',
   },
-  scrollContent: {
-    flexGrow: 1,
+  contenu: {
     alignItems: 'center',
-    justifyContent: 'center',
     padding: 24,
+    paddingBottom: 40,
   },
-  premierTitre: {
+  titre: {
     fontSize: 22,
     fontWeight: '700',
     color: '#1f2937',
+    marginBottom: 18,
   },
-  sousTitre: {
+  texteState: {
     fontSize: 14,
     color: '#6b7280',
-    marginTop: 4,
-    marginBottom: 12,
+    textAlign: 'center',
+    marginTop: 12,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6b7280',
-    marginBottom: 4,
+  liste: {
+    width: '100%',
+    maxWidth: 400,
+    gap: 10,
   },
-  infoTexte: {
+  carte: {
+    borderRadius: 12,
+    backgroundColor: '#f3f4f6',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 4,
+  },
+  carteId: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  carteStats: {
     fontSize: 14,
     color: '#374151',
   },
-  form: {
-    width: '100%',
-    maxWidth: 320,
-    marginTop: 26,
-  },
-  input: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    fontSize: 15,
-    color: '#1f2937',
-    backgroundColor: '#ffffff',
-    marginBottom: 14,
-  },
-  astuce: {
+  carteHash: {
     fontSize: 12,
     color: '#9ca3af',
-    marginBottom: 8,
   },
-  bouton: {
-    height: 48,
+  blocErreur: {
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+  },
+  erreur: {
+    fontSize: 14,
+    color: '#c62828',
+    textAlign: 'center',
+  },
+  boutonReessayer: {
+    height: 44,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#43a047',
-    marginTop: 6,
+    paddingHorizontal: 32,
   },
   boutonAppuye: {
     backgroundColor: '#3b8b40',
   },
-  boutonDesactive: {
-    backgroundColor: '#a5d6a7',
-  },
   boutonTexte: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: '#ffffff',
-  },
-  normalMessage: {
-    fontSize: 14,
-    color: '#2e7d32',
-    marginTop: 14,
-    fontWeight: '600',
-  },
-  erreur: {
-    fontSize: 13,
-    color: '#c62828',
-    marginBottom: 8,
   },
 });

@@ -10,6 +10,7 @@ import { seDeconnecter } from '../store/utilisateur';
 const DESTINATIONS = [
   { route: '/usine', libelle: 'Usine' },
   { route: '/maison', libelle: 'Maison' },
+  { route: '/mairie', libelle: 'Mairie' },
   { route: '/boutique', libelle: 'Boutique' },
   { route: '/arene', libelle: 'Arène' },
 ] as const;
@@ -17,6 +18,7 @@ const DESTINATIONS = [
 const LARGEUR_MENU = 280;
 
 type RouteMenu = (typeof DESTINATIONS)[number]['route'];
+
 type Props = { ouvert: boolean; onFermer: () => void };
 
 // Menu latéral (drawer « maison ») de la fenêtre principale uniquement :

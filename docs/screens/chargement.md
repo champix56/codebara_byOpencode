@@ -4,12 +4,15 @@ Route : `/` — fichier `src/app/index.tsx`
 
 ## Rôle
 
-Écran de démarrage de l'application. Exécute à l'ouverture **deux tâches de chargement factices, 2 secondes chacune, dans cet ordre** :
+Écran de démarrage de l'application. Barre visuelle de 4 s (libellés « auto-connexion » puis « recuperation de la collection », et **pendant** que la barre tourne :
 
-1. `auto-connexion`
-2. `recuperation de la collection`
+- si la tranche utilisateur persistée contient **un couple de tokens** (`apiToken` + `requestToken`) → **vrai contrôle de session** : `authentifierParTokens` → `GET /user/auth` par tokens (contrat pyCodebara2 §5.2b), sans rotation ;
+  - données fraîches reçues → `dispatch(seConnecter(...))` (données mises à jour, tokens conservés) puis `$ router.replace('/principal')` — reprise de session transparente ;
+  - couple refusé (session morte) → `dispatch(seDeconnecter())` + `router.replace('/login')` ;
+  - panne réseau → `router.replace('/login')` (les tokens persistent tant qu'ils n'ont pas été consommés) ;
+- sinon → `router.replace('/login')`.
 
-Intitulés exacts à conserver tels quels (textes visibles à l'utilisateur). **Faux chargement placeholder** — à remplacer par de vrais appels quand un backend existera ; les libellés et durées sont centralisés en constantes (`TASKS`, `TASK_DURATION_MS`) en tête du fichier.
+Les libellés/la durée restent centralisés en constantes (`TASKS`, `TASK_DURATION_MS`).
 
 ## Structure visuelle
 
@@ -23,12 +26,13 @@ Intitulés exacts à conserver tels quels (textes visibles à l'utilisateur). **
 
 - `progress` : 0 → 1, rafraîchi toutes les 50 ms (calcul à partir de `Date.now()`, pas cumulé — résiste aux suspensions).
 - Tâche affichée : `TASKS[floor(progress × 2)]` (clampée).
-- Navigation déclenchée une seule fois (ref `navigated`) dès que `progress ≥ 1`.
+- Navigation déclenchée une seule fois (ref `navigated`) dès que `progress ≥ 1` — puis la reprise de session (cf. Rôle) s'ajoute de façon asynchrone.
+- Réhydratation : l'écran est démontré **après** le `PersistGate` — la tranche utilisateur est déjà relue.
 
 ## Navigation
 
 - Point d'entrée de l'app (première route du Stack racine).
-- Sortie unique : `router.replace('/login')` à la fin des tâches → l'écran est **retiré de la pile** (bouton retour impossible vers lui).
+- Sortie : `$ router.replace('/login')` **ou `'/principal'`** à la fin des tâches (cf. Rôle) → l'écran est **retiré de la pile** (retour arrière impossible vers lui).
 
 ## Notes
 

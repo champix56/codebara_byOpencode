@@ -11,14 +11,17 @@ import {
 } from 'react-native';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { modifierProfil } from '../store/utilisateur';
+import { ErreurApi, renouvelerMotDePasse } from '../services/api';
 
 // Fenêtre mairie : accès aux informations personnelles du compte et à leur
-// modification. Le nickname est écrit dans la tranche utilisateur persistée ;
-// le changement de mot de passe n'est PAS faisable aujourd'hui : le mot de
-// passe est généré par le serveur et envoyé par e-mail à la création (contrat
-// pyCodebara2 §5.1 / §12.1), et l'endpoint de mise à jour (PUT /user) n'existe
-// pas encore — la section est volontairement inertée tant que le serveur ne
-// le rend pas disponible.
+// modification.
+// - nickname : écrit dans la tranche utilisateur persistée (PUT /user absent
+//   du serveur à ce jour — contrat §9.3/§12.1) ;
+// - mot de passe : le serveur ne permet pas de CHOISIR un mot de passe ;
+//   le seul chemin contractuel est POST /user/renew-password (§5.9) — le
+//   mot de passe actuel devient inutilisable pour la connexion et un NOUVEAU
+//   mot de passe aléatoire est envoyé par e-mail (réponse {"renewed": true},
+//   sans token : aucune rotation ; 403 « Forbidden » ambigu par conception).
 export default function MairieEcran() {
   const dispatcher = useAppDispatch();
   const utilisateur = useAppSelector((etat) => etat.utilisateur);
@@ -26,8 +29,10 @@ export default function MairieEcran() {
   const [nickname, setNickname] = useState(utilisateur.nickname);
   const [message, setMessage] = useState<{ texte: string; erreur: boolean } | null>(null);
   const [enEnregistrement, setEnEnregistrement] = useState(false);
+  const [etapeMdp, definirEtapeMdp] = useState<'repos' | 'confirme' | 'envoi'>('repos');
 
   const peutSoumettre = !enEnregistrement && nickname.trim().length > 0;
+  const mdpDisponible = utilisateur.mail.length > 0;
 
   // Enregistrement local du nickname (PUT /user absent du serveur à ce jour).
   const enregistrer = async () => {
@@ -38,6 +43,34 @@ export default function MairieEcran() {
       setMessage({ texte: 'Modifications enregistrées.', erreur: false });
     } finally {
       setEnEnregistrement(false);
+    }
+  };
+
+  // Renouvellement du mot de passe côté serveur (§5.9) : le mail du compte est
+  // celui de la tranche. Échec 403 « Forbidden » (mail mal formé / compte
+  // inconnu, indiscernables volontairement) OU succès → même message ambigu
+  // que l'écran de connexion : pas d'oracle d'existence du compte.
+  const envoyerNouveauMotDePasse = async () => {
+    definirEtapeMdp('envoi');
+    setMessage(null);
+    try {
+      await renouvelerMotDePasse(utilisateur.mail);
+      setMessage({
+        texte: 'Mot de passe renouvelé : un courriel part avec le nouveau. L’actuel ne fonctionnera plus pour la connexion.',
+        erreur: false,
+      });
+    } catch (erreur) {
+      const libelle = (erreur as Error).message;
+      if (erreur instanceof ErreurApi && libelle === 'Forbidden') {
+        setMessage({
+          texte: 'Demande envoyée : un courriel avec le nouveau mot de passe arrivera si le compte est reconnu.',
+          erreur: false,
+        });
+      } else {
+        setMessage({ texte: libelle, erreur: true });
+      }
+    } finally {
+      definirEtapeMdp('repos');
     }
   };
 
@@ -79,11 +112,48 @@ export default function MairieEcran() {
           />
 
           <Text style={styles.label}>Mot de passe</Text>
-          <View style={[styles.input, styles.champDeshibile]}>
-            <Text style={styles.champDeshibileTexte}>
-              Modifiable plus tard — généré par le serveur et envoyé par e-mail à la création.
-            </Text>
-          </View>
+          {etapeMdp === 'repos' && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.boutonLien,
+                !mdpDisponible && styles.boutonDesactive,
+                pressed && mdpDisponible && styles.boutonAppuye,
+              ]}
+              disabled={!mdpDisponible}
+              onPress={() => definirEtapeMdp('confirme')}
+            >
+              <Text style={styles.boutonTexte}>Recevoir un nouveau mot de passe par e-mail</Text>
+            </Pressable>
+          )}
+
+          {etapeMdp !== 'repos' && (
+            <View style={styles.blocCompose}>
+              {etapeMdp === 'confirme' && (
+                <Text style={styles.avertissement}>
+                  Un mot de passe aléatoire sera créé par le serveur et envoyé à&nbsp;:
+                  {'\n' + (utilisateur.mail || '—') + '\n'}
+                  Ton mot de passe actuel cessera de fonctionner pour la connexion.
+                </Text>
+              )}
+              {etapeMdp === 'confirme' && (
+                <View style={styles.ligneBoutons}>
+                  <Pressable
+                    style={({ pressed }) => [styles.bouton, styles.boutonMoitie, styles.boutonDanger, pressed && styles.boutonAppuye]}
+                    onPress={envoyerNouveauMotDePasse}
+                  >
+                    <Text style={styles.boutonTexte}>Confirmer</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [styles.bouton, styles.boutonMoitie, styles.boutonAnnule, pressed && styles.boutonAnnuleAppuye]}
+                    onPress={() => definirEtapeMdp('repos')}
+                  >
+                    <Text style={styles.boutonAnnuleTexte}>Annuler</Text>
+                  </Pressable>
+                </View>
+              )}
+              {etapeMdp === 'envoi' && <Text style={styles.texteEtat}>Demande envoyée au serveur…</Text>}
+            </View>
+          )}
 
           <Pressable
             style={({ pressed }) => [
@@ -170,16 +240,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     marginBottom: 14,
   },
-  champDeshibile: {
-    borderColor: '#e5e7eb',
-    backgroundColor: '#f9fafb',
-    height: 'auto',
-    minHeight: 48,
-  },
-  champDeshibileTexte: {
-    fontSize: 13,
-    color: '#9ca3af',
-  },
   bouton: {
     height: 48,
     borderRadius: 10,
@@ -187,6 +247,55 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#43a047',
     marginTop: 6,
+  },
+  boutonLien: {
+    height: 48,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#43a047',
+    marginBottom: 14,
+  },
+  boutonDanger: {
+    backgroundColor: '#c62828',
+  },
+  boutonAnnule: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  boutonAnnuleAppuye: {
+    backgroundColor: '#f3f4f6',
+  },
+  boutonAnnuleTexte: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  blocCompose: {
+    marginTop: 2,
+  },
+  ligneBoutons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  boutonMoitie: {
+    flex: 1,
+  },
+  avertissement: {
+    fontSize: 13,
+    color: '#374151',
+    backgroundColor: '#fef4f2',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  texteEtat: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
   },
   boutonAppuye: {
     backgroundColor: '#3b8b40',

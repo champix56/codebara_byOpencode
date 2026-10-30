@@ -35,6 +35,6 @@ Fenêtre **double** : sert à la fois de page de connexion et de page de créati
 
 ## Notes
 
-- Les libellés/durées/tokens du serveur : http://<ip>:8080 — adresse via **`EXPO_PUBLIC_API_URL`** (défaut `http://localhost:8080` ; `10.0.2.2` depuis un émulateur Android ; IP LAN d'un téléphone ; CORS du serveur sur le web : `localhost:8081`/`5173`).
+- Les libellés/durées/tokens du serveur : http://<ip>:8080 — adresse via **`EXPO_PUBLIC_SERVER_URL`** (défaut `http://localhost:8080` ; `10.0.2.2` depuis un émulateur Android ; IP LAN d'un téléphone ; CORS du serveur sur le web : `localhost:8081`/`5173`).
 - Le mot de passe jamais stocké en clair ni persisté (tranche = hash serveur opaque + tokens).
 - Les mêmes règles `DEBUG` qu'avant : `.env` versionné + `app.config.ts` (canaux `EXPO_PUBLIC_DEBUG` + `extra.debug`), redémarrer Metro après changement.

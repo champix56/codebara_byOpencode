@@ -35,10 +35,10 @@ npm run android           # émulateur Android
 
 Contrat : [`/home/champix/projets/pyCodebara2/docs/integration-client.md`](../pyCodebara2/docs/integration-client.md).
 
-- Base URL via **`EXPO_PUBLIC_API_URL`** (défaut `http://localhost:8080`) :
+- Base URL via **`EXPO_PUBLIC_SERVER_URL`** (posée dans `.env`, défaut code `http://localhost:8080`) :
   - web dev : CORS serveur autorise `localhost:8081` / `5173` ;
-  - émulateur Android : `EXPO_PUBLIC_API_URL=http://10.0.2.2:8080 npx expo start` ;
-  - téléphone physique : `EXPO_PUBLIC_API_URL=http://<IP LAN du PC>:8080 npx expo start`.
+  - émulateur Android : `EXPO_PUBLIC_SERVER_URL=http://10.0.2.2:8080` dans `.env` ;
+  - téléphone physique : `EXPO_PUBLIC_SERVER_URL=http://<IP LAN du PC>:8080` (valeur actuelle du `.env` : `http://192.168.20.205:8080`).
 - Authentification : `GET /user/auth` (header `datas`, mot de passe haché `SHA256(mail_exact + clair)` en client, §3.2) → données utilisateur + **double token rotatif** (`API_TOKEN` long + `API_REQUEST_TOKEN` une-requête) — les deux sont **persistés** dans la tranche utilisateur (reprise de session au lancement via l'écran de chargement) ; le `API_REQUEST_TOKEN` est re-émis à chaque succès de route protégée (rotation automatique dans `src/services/api.ts`, appels sérialisés car le serveur n'accepte qu'une requête par couple).
 - Création de compte : `POST /user {"mail"}` — le mot de passe est généré et **envoyé par e-mail par le serveur** (désactivé si le serveur tourne en `DEBUG=True`, contrat §12.1).
 - La **modification** du profil (nickname) est pour l'instant locale (tranche persistée, fenêtre mairie) : `PUT /user` n'existe pas encore côté serveur (contrat §9.3).

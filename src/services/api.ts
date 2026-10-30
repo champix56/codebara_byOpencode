@@ -6,10 +6,11 @@ import { hacherMotDePasse } from '../utils/hash';
 // Client de l'API pyCodebara2 — contrat : 
 // docs/integration-client.md (projet /home/champix/projets/pyCodebara2).
 
-// Hôte du serveur : EXPO_PUBLIC_API_URL (ex. http://10.0.2.2:8080 depuis un
+// Hôte du serveur : EXPO_PUBLIC_SERVER_URL (valeur posée dans .env) — ex.
+// http://10.0.2.2:8080 depuis un
 // émulateur Android, http://<IP LAN>:8080 sur un téléphone physique, ou
-// http://localhost:8080 sur le web — CORS du serveur : localhost:8081/5173).
-const URL_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
+// http://localhost:8080 sur le web — CORS du serveur : localhost:8081/5173.
+const URL_BASE = process.env.EXPO_PUBLIC_SERVER_URL ?? 'http://localhost:8080';
 // Timeout des appels simples (contrat §2 : 5–10 s ; POST /card long — non utilisé ici).
 const DELAI_APP_MS = 10_000;
 

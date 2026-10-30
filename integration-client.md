@@ -59,9 +59,9 @@ Compte = e-mail (`mail`) + mot de passe. Le serveur délivre **deux tokens** :
 
 - **Créer un compte** : `POST /user`, body `{"mail": "<email>"}` *(sans header `datas`, voir §5.1)*
   → réponse `{"API_TOKEN": "<hex 64>", "API_REQUEST_TOKEN": "<hex 64>"}`.
-  ⚠ Le serveur génère un mot de passe aléatoire et l'envoie **par e-mail**
-  uniquement si `DEBUG=False` côté serveur ; en configuration de développement
-  actuelle (`DEBUG=True`), **aucun mot de passe n'est transmis au client** — voir §12.1.
+  ⚠ Le serveur génère un mot de passe aléatoire et l'envoie **par e-mail** au joueur
+  (décision 2026-10-30 : envoi systématique, **même en `DEBUG=True`**) ; aucun mot de
+  passe n'est jamais transmis au client via l'API — voir §12.1.
 - **Authentification login/pass** : `GET /user/auth` avec header `datas`
   (voir §5.2) → renvoie les données utilisateur **+ les deux tokens fraîchement ré-émis**.
 
@@ -181,6 +181,7 @@ datas: {"API_TOKEN": "ab12...", "API_REQUEST_TOKEN": "cd34..."}
 | `/user/auth` | GET | non (c'est l'appel d'auth) | **✔ actif** |
 | `/user` | POST | non (création) | **✔ actif** (403 Forbidden si mail mal formé ou compte déjà existant) |
 | `/user/renew-password` | POST | non (mot de passe oublié) | **✔ actif** (ajouté 2026-10-30, cf. §5.9) |
+| `/user` | PUT (maj profil « mairie ») | tokens | **✔ actif** (ajouté 2026-10-30, cf. §5.10) |
 | `/user` | GET (user connecté) | tokens | ✗ prévu (404) |
 | `/user/{id}` | GET | tokens | ✗ prévu (404) |
 | `/user` | PUT (maj profil) | tokens | ✗ prévu (404) |
@@ -213,7 +214,8 @@ Content-Type: application/json
 **Effets serveur** : validation du mail (format + unicité), création de l'utilisateur
 (nickname initial = mail), mot de passe généré (15 car.) **envoyé par e-mail** (titre
 `CodEbara`, logo œuf inline, identifiants en clair + consigne « changez ce mot de passe
-au plus vite depuis la mairie ») si `DEBUG=False` ; retourne les deux tokens.
+au plus vite depuis la mairie ») — **toujours envoyé, même en `DEBUG=True`** 
+(décision 2026-10-30, cf. §12.1) ; retourne les deux tokens.
 **Limites** (vérifiées dans le code, état 2026-10-30) :
 - le mail doit être de forme `local@domaine.tld` (`isMailValid`) → sinon
   **403 `{"message": "Forbidden"}`** ;
@@ -491,9 +493,75 @@ comptes) : côté client, affichez « si ce compte existe, un mail vient d'être
 et laissez la réponse de succès masquer la distinction.
 
 **À noter** : la réponse de succès **ne contient pas** `API_REQUEST_TOKEN` (aucun token
-n'est émis via cette route) — ne déclenchez pas votre rotation sur cet appel. En mode
-`DEBUG=True` serveur, le mail n'est pas envoyé et le mot de passe est imprimé dans le
-log du serveur.
+n'est émis via cette route) — ne déclenchez pas votre rotation sur cet appel. Le mail
+part systématiquement, même en `DEBUG=True` serveur (décision 2026-10-30) ; en DEBUG,
+le mot de passe est en outre imprimé dans le log du serveur.
+
+### 5.10 `PUT /user` — mise à jour du profil (« mairie », tokens requis)
+
+Ajouté le 2026-10-30. C'est l'écran « mairie » (Profil) : changement de nickname, de
+mail et/ou de mot de passe **par l'utilisateur connecté**. C'est ici
+(uniquement ici) que s'applique la règle de complexité du mot de passe.
+
+**Requête** (tous les champs sont optionnels, au moins un requis) :
+
+```
+PUT /user HTTP/1.1
+datas: {"API_TOKEN": "…", "API_REQUEST_TOKEN": "…"}
+Content-Type: application/json
+
+{"nickname": "NouveauPseudo", "mail": "joueur@exemple.fr", "password": "<64 hex>"}
+```
+
+**Réponse (succès)** — profil à jour + rotation :
+
+```json
+{
+  "id": 670, "nickname": "NouveauPseudo", "mail": "joueur@exemple.fr",
+  "amount": 6666666666, "hash": "5723…64 hex…",
+  "API_REQUEST_TOKEN": "…nouveau…"
+}
+```
+
+**Règle de mot de passe (validation CÔTÉ CLIENT, obligatoire)** — le serveur reçoit
+le mot de passe **déjà haché** et ne peut pas vérifier le clair : c'est le client
+qui doit refuser la saisie conforme à la règle avant de hacher :
+
+- au moins **une majuscule** ;
+- au moins **une minuscule** ;
+- au moins **un caractère spécial** (non alphanumérique, ex. `!$%&+-_@#…`) ;
+- **≥ 7 caractères** au total.
+
+Une fois la règle respectée, le client envoie
+`password = SHA256(mail_final + motDePasseClair)` — hexadécimal **minuscule**,
+64 caractères (§3.2), où `mail_final` est :
+
+- le **nouveau** mail si le body change le mail ;
+- le mail **courant** de la session sinon.
+
+Le serveur vérifie uniquement la **forme** du hash ((`[0-9a-f]{64}`) : une autre
+forme → `403 Forbidden` (mauvais format — pas une indication de complexité).
+
+**Échecs** :
+
+| Situation | Réponse |
+|---|---|
+| body vide ou aucun champ connu | `400` `{"message": "Invalid Request with body given for: ..."}` |
+| `password` pas hexa min. 64 | `403` `{"message": "Forbidden"}` |
+| `mail` mal formé | `403` `{"message": "Forbidden"}` |
+| `mail` déjà utilisé par un autre compte | `403` `{"message": "Forbidden"}` |
+| `mail` fourni (différent du courant) **sans** `password` | `403` `{"message": "Forbidden"}` |
+| tokens invalides/expirés | `400` `{"message": "Invalid REQUEST TOKEN"}` (session morte → re-login) |
+
+⚠ **Pourquoi un mail sans password est refusé (403)** : le hash d'authentification
+est `SHA256(mail + clair)` (§3.2) — changer le mail seul rend l'ancien hash
+inutilisable au prochain login (compte bloqué). Un changement de mail doit donc
+toujours s'accompagner d'un nouveau mot de passe.
+
+Détails : `nickname` vide ou non-chaîne → 400 (corps illisible) ; `last_action` est
+notifié côté base ; la session et les tokens **ne dépendent pas** du mot de passe :
+aucune reconnexion nécessaire après un `PUT /user` réussi (l'`API_REQUEST_TOKEN`
+renouvelé de la réponse reste valable).
 
 ---
 
@@ -787,7 +855,7 @@ En configuration de dev actuelle, le serveur IA externe (FastSDCPU) peut ne pas 
 
 ### 9.3 Endpoints encore absents
 
-`GET /user`, `GET /user/{id}`, `PUT /user`, `GET /season/check`… renvoient aujourd'hui
+`GET /user`, `GET /user/{id}`, `GET /season/check`… renvoient aujourd'hui
 400/404 texte. Structurez le client pour les **ignorer proprement** (feature flags)
 et activer les features dès qu'ils arrivent au serveur (suivre `docs/api.md`).
 
@@ -824,6 +892,9 @@ reste du tirage est identique par construction (déterminisme de la saison).
 - [ ] Cache collection + `GET /card` de synchronisation au démarrage
 - [ ] Écran « mot de passe oublié » : `POST /user/renew-password` (§5.9, message
       neutre pour ne pas révéler si le compte existe)
+- [ ] Écran « mairie » : `PUT /user` (§5.10) — validation locale de la règle de
+      mot de passe (majuscule + minuscule + spécial + ≥7 car.) **avant** hachage
+      `SHA256(mail_final + clair)` ; changer le mail ⇒ nouveau password obligatoire
 - [ ] Intégrer `PUT /card/name` avec garde-fou anti tar.xz (§5.7)
 - [ ] `GET /season` : parsing opportuniste, layout par défaut si absent
 - [ ] Tests de recette : §8.1 (curl) reproductibles + intégration app
@@ -837,21 +908,24 @@ reste du tirage est identique par construction (déterminisme de la saison).
 | 2026-10-30 | Contrat établi d'après le code serveur de pyCodebara2 + `endpoints.odt` ; décision owner : **ZIP définitif** pour `.cdz` (renommage serveur à aligner) |
 | 2026-10-30 | Authentification mail de bienvenue : SMTP configuré via `.env` (`SMTP_*`), mail HTML `CodEbara` (template `codebara/templates/newUserMail.html`) envoyé au `POST /user` réussi ; en `DEBUG=True`, mot de passe imprimé dans le log serveur |
 | 2026-10-30 | Nouveau `POST /user/renew-password` (mot de passe oublié) ; `POST /user` refuse mail mal formé ou compte existant avec **403 Forbidden** ; colonne `user.last_action` (DATETIME, ON UPDATE) — cf. §5.9 |
-| à venir | `GET /user`, `PUT /user`, `GET /season/check`, mode génération asynchrone, tables de sécurité anti-rejeu, HTTPS |
+| 2026-10-30 | **Envoi des mails systématique, même en `DEBUG=True`** (fin de l'ancien comportement « pas d'envoi en DEBUG ») ; en DEBUG le mot de passe reste en outre imprimé dans le log serveur |
+| 2026-10-30 | Nouveau `PUT /user` (« mairie ») : maj nickname/mail/password via tokens ; règle de mot de passe (majuscule + minuscule + spécial + ≥7 car.) appliquée **côté client**, mot de passe envoyé `SHA256(mail_final + clair)` hexa min. 64 ; changement de mail ⇒ password requis — cf. §5.10 |
+| à venir | `GET /user`, `GET /season/check`, mode génération asynchrone, tables de sécurité anti-rejeu, HTTPS |
 
 ---
 
 ## 12. À valider / demander au propriétaire du serveur
 
-1. **DEBUG=True bloque les mails** (état 2026-10-30) : en configuration de
-   développement, `POST /user` et `POST /user/renew-password` n'envoient pas d'e-mail ;
-   le mot de passe généré est **imprimé dans le log du serveur**
-   (`[DEBUG] Mail de ... non envoyé...`). Pour recruter un compte de test : lire ce log,
-   ou demander à l'owner la vraie route (envoi réel avec SMTP configuré).
-   *Ne pas* implémenter de contournement client. Le changement de mot de passe visé par
-   le mail (« mairie » = écran Profil) suppose `PUT /user` — pas encore implémenté côté
-   serveur ; en attendant, le renouvellement (`POST /user/renew-password`) est le seul
-   chemin serveur pour redonner un mot de passe.
+1. **Mails toujours envoyés, même en `DEBUG=True`** (état 2026-10-30) : `POST /user`
+   et `POST /user/renew-password` envoient systématiquement l'e-mail (comportement
+   DEBUG aligné sur la production). En configuration de développement, le mot de passe
+   généré est **en outre imprimé dans le log du serveur**
+   (`[DEBUG] Mail de ... envoyé...`) : pratique pour les tests de recette sans boîte
+   mail. *Ne pas* implémenter de contournement client côté mot de passe (l'API ne
+   transmet jamais le mot de passe). Le changement **volontaire** de mot de passe
+   par l'utilisateur connecté passe désormais par `PUT /user` (« mairie », §5.10)
+   avec la règle de complexité ; le « mot de passe oublié » sans session reste
+   `POST /user/renew-password` (§5.9).
 2. **HTTPS / proxy** : actuellement `http://` — éviter d'envoyer les tokens sur du réseau
    non confidentiel hors dev ; demander un reverse-proxy TLS au besoin.
 3. **Corps d'erreur JSON** (optionnel mais recommandé) : le texte brut rend la

@@ -21,7 +21,11 @@ type Etat =
   | { phase: 'erreur'; message: string };
 
 export default function CarteDetail({ carteId }: { carteId: number }) {
-  const { idUser, apiToken, requestToken } = useAppSelector((etat) => etat.utilisateur);
+  // NE PAS importer requestToken : il change À CHAQUE appel protégé réussi
+  // (rotation §3.3) — en dépendance de charger/useEffect, le chargement
+  // repartait en boucle ou en double requête. Le service lit le token vivant
+  // dans le store au moment de l'appel.
+  const { idUser, apiToken } = useAppSelector((etat) => etat.utilisateur);
   const [etat, definirEtat] = useState<Etat>({ phase: 'chargement' });
 
   const charger = useCallback(async () => {
@@ -44,7 +48,7 @@ export default function CarteDetail({ carteId }: { carteId: number }) {
       }
       // 2) Serveur — validation global (sha256 == cardHash) puis stockage.
       if (!cdz) {
-        if (!apiToken || !requestToken) {
+        if (!apiToken) {
           definirEtat({ phase: 'sans-session' });
           return;
         }
@@ -74,7 +78,7 @@ export default function CarteDetail({ carteId }: { carteId: number }) {
       }
       definirEtat({ phase: 'erreur', message: (erreur as Error).message });
     }
-  }, [carteId, idUser, apiToken, requestToken]);
+  }, [carteId, idUser, apiToken]); // pas de requestToken — rotation §3.3
 
   useEffect(() => {
     (async () => charger())();

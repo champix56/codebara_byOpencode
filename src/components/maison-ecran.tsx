@@ -19,7 +19,12 @@ type EtatListe =
   | { phase: 'erreur'; message: string };
 
 export default function MaisonEcran() {
-  const { apiToken, requestToken, idUser } = useAppSelector((etat) => etat.utilisateur);
+  // NE PAS importer requestToken ici : il change À CHAQUE appel protégé
+  // réussi (rotation §3.3 dans le store) — l'inclure dans une dépendance de
+  // charger/useEffect ferait rejouer le chargement en boucle. Le service lit
+  // le token vivant dans le store au moment de l'appel ; le garde-fou
+  // d'affichage s'appuie sur apiToken (stable pendant la session).
+  const { apiToken, idUser } = useAppSelector((etat) => etat.utilisateur);
   const [etat, definirEtat] = useState<EtatListe>({ phase: 'chargement' });
   const [cartes, definirCartes] = useState<CarteListee[]>([]);
   const [noms, definirNoms] = useState<Record<string, string>>({});
@@ -27,7 +32,7 @@ export default function MaisonEcran() {
 
   const charger = useCallback(
     async (modeRafraichit: boolean) => {
-      if (!apiToken || !requestToken) {
+      if (!apiToken) {
         definirEtat({ phase: 'sans-session' });
         return;
       }
@@ -62,7 +67,7 @@ export default function MaisonEcran() {
         definirRafraichit(false);
       }
     },
-    [apiToken, requestToken, idUser],
+    [apiToken, idUser], // pas de requestToken — rotation à chaque succès (§3.3)
   );
 
   useEffect(() => {

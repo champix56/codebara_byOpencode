@@ -113,10 +113,11 @@ function lireUtilisateur(source: Record<string, unknown>): DonneesUtilisateurSer
   };
 }
 
-// Mort de session (couple de tokens consommé) : remise à zéro de la tranche
-// persistée + retour à la connexion, centralisés dans appelProtege — l'écran
-// reçoit ErreurSession (navigation déjà enclenchée).
-function quitterSession(): void {
+// Mort de session (couple de tokens consommé) ou sortie volontaire (mot de
+// passe changé, §5.10 : l'app déconnecte l'utilisateur après un 200) :
+// remise à zéro de la tranche persistée + retour à la connexion, centralisés
+// ici — l'écran reçoit ensuite son erreur ou se redessine sur /login.
+export function quitterSession(): void {
   store.dispatch(seDeconnecter());
   persistor.purge();
   router.replace('/login');
@@ -264,6 +265,32 @@ export async function renouvelerMotDePasse(mailExact: string): Promise<void> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mail: mailExact }),
   });
+}
+
+// ─── Mise à jour du profil (§5.10 — PUT /user, tokens requis) ───────────────
+
+// Champs tous optionnels (au moins un requis, sinon le serveur renverrait un
+// 400). Le mot de passe est validé et haché ICI (contrat §5.10 : validation
+// côté client obligatoire) : le serveur ne reçoit que le hash final
+// SHA256(mail_courant + clair) — le mail de session ne change pas par cet
+// appel de la mairie, donc mail_final = mail courant. Réponse 200 : profil à
+// jour + nouveau API_REQUEST_TOKEN (rotation appliquée par appelProtege).
+export async function modifierUtilisateurServeur(
+  modifications: { nickname?: string; motDePasseClair?: string },
+): Promise<DonneesUtilisateurServeur> {
+  if (modifications.nickname === undefined && modifications.motDePasseClair === undefined) {
+    throw new ErreurApi('Aucune modification à envoyer');
+  }
+  const corps: Record<string, unknown> = {};
+  if (modifications.nickname !== undefined) {
+    corps.nickname = modifications.nickname;
+  }
+  if (modifications.motDePasseClair !== undefined) {
+    const mailSession = store.getState().utilisateur.mail;
+    corps.password = await hacherMotDePasse(mailSession, modifications.motDePasseClair);
+  }
+  const reponse = await appelProtege('/user', { method: 'PUT', corps });
+  return lireUtilisateur(reponse);
 }
 
 // ─── Cartes (§5.4 – GET /card : liste de l'utilisateur connecté) ────────────

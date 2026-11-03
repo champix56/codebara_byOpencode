@@ -11,17 +11,38 @@ import {
 } from 'react-native';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { modifierProfil } from '../store/utilisateur';
-import { ErreurApi, renouvelerMotDePasse } from '../services/api';
+import {
+  ErreurSession,
+  modifierUtilisateurServeur,
+  quitterSession,
+} from '../services/api';
+import { evaluerMotDePasse, type EvaluationMotDePasse } from '../utils/motDePasse';
 
-// Fenêtre mairie : accès aux informations personnelles du compte et à leur
-// modification.
-// - nickname : écrit dans la tranche utilisateur persistée (PUT /user absent
-//   du serveur à ce jour — contrat §9.3/§12.1) ;
-// - mot de passe : le serveur ne permet pas de CHOISIR un mot de passe ;
-//   le seul chemin contractuel est POST /user/renew-password (§5.9) — le
-//   mot de passe actuel devient inutilisable pour la connexion et un NOUVEAU
-//   mot de passe aléatoire est envoyé par e-mail (réponse {"renewed": true},
-//   sans token : aucune rotation ; 403 « Forbidden » ambigu par conception).
+// Indicateur de niveau : libellé et couleur selon le nombre de règles
+// respectées (0–2 faible, 3–4 moyen, 5 fort — cf. src/utils/motDePasse.ts).
+const NIVEAU_LIBELLE: Record<NonNullable<EvaluationMotDePasse['niveau']>, string> = {
+  faible: 'Faible',
+  moyen: 'Moyen',
+  fort: 'Fort',
+};
+const NIVEAU_COULEUR: Record<NonNullable<EvaluationMotDePasse['niveau']>, string> = {
+  faible: '#ef4444',
+  moyen: '#f59e0b',
+  fort: '#22c55e',
+};
+const COULEUR_SEGMENT_VIDE = '#e5e7eb';
+
+// Fenêtre mairie : informations personnelles du compte et modifications.
+// - nickname : envoyé au serveur via PUT /user (contrat §5.10, tokens
+//   requis) puis tranche rechargée depuis la réponse ; sans session
+//   (compte debug GOD, tokens nuls) resté local ;
+// - mot de passe : SAISI par l'utilisateur (champ masqué + bouton Afficher/
+//   Masquer, indicateur de niveau). Validé CÔTÉ CLIENT (§5.10 : 5 règles) puis
+//   haché côté client — le serveur ne voit que SHA256(mail + clair). Sur le
+//   200 de PUT /user : déconnexion complète (reset tranche persistée + purge
+//   + retour /login) — l'utilisateur se reconnecte avec le nouveau mot de
+//   passe. La session serveur resterait valable, mais l'app préfère la sortie
+//   explicite (décision produit).
 export default function MairieEcran() {
   const dispatcher = useAppDispatch();
   const utilisateur = useAppSelector((etat) => etat.utilisateur);
@@ -29,48 +50,61 @@ export default function MairieEcran() {
   const [nickname, setNickname] = useState(utilisateur.nickname);
   const [message, setMessage] = useState<{ texte: string; erreur: boolean } | null>(null);
   const [enEnregistrement, setEnEnregistrement] = useState(false);
-  const [etapeMdp, definirEtapeMdp] = useState<'repos' | 'confirme' | 'envoi'>('repos');
+  const [motDePasse, setMotDePasse] = useState('');
+  const [afficherMdp, setAfficherMdp] = useState(false);
+  const [enEnvoiMdp, setEnEnvoiMdp] = useState(false);
+
+  const sessionActive = utilisateur.apiToken !== null;
+  const evaluation = evaluerMotDePasse(motDePasse);
+  const couleurNiveau = evaluation.niveau
+    ? NIVEAU_COULEUR[evaluation.niveau]
+    : COULEUR_SEGMENT_VIDE;
 
   const peutSoumettre = !enEnregistrement && nickname.trim().length > 0;
-  const mdpDisponible = utilisateur.mail.length > 0;
+  const peutEnvoyerMdp = sessionActive && evaluation.toutesRespectees && !enEnvoiMdp;
 
-  // Enregistrement local du nickname (PUT /user absent du serveur à ce jour).
+  // Pseudo : PUT /user {nickname} (§5.10) — la réponse 200 porte le profil à
+  // jour + le nouveau API_REQUEST_TOKEN (rotation gérée par appelProtege) ;
+  // la tranche est rechargée depuis le profil renvoyé. Mort de session
+  // (« Invalid REQUEST TOKEN ») : déjà gérée dans api.ts (reset + /login).
   const enregistrer = async () => {
     if (!peutSoumettre) return;
     setEnEnregistrement(true);
+    setMessage(null);
     try {
-      dispatcher(modifierProfil({ nickname: nickname.trim() }));
-      setMessage({ texte: 'Modifications enregistrées.', erreur: false });
+      if (sessionActive) {
+        const profil = await modifierUtilisateurServeur({ nickname: nickname.trim() });
+        dispatcher(modifierProfil({ nickname: profil.nickname, hash: profil.hash }));
+        setMessage({ texte: 'Modifications enregistrées sur le serveur.', erreur: false });
+      } else {
+        // Compte debug GOD : aucun token serveur → sauvegarde locale seule.
+        dispatcher(modifierProfil({ nickname: nickname.trim() }));
+        setMessage({ texte: 'Modifications enregistrées localement (aucune session serveur).', erreur: false });
+      }
+    } catch (erreur) {
+      if (erreur instanceof ErreurSession) return;
+      setMessage({ texte: (erreur as Error).message, erreur: true });
     } finally {
       setEnEnregistrement(false);
     }
   };
 
-  // Renouvellement du mot de passe côté serveur (§5.9) : le mail du compte est
-  // celui de la tranche. Échec 403 « Forbidden » (mail mal formé / compte
-  // inconnu, indiscernables volontairement) OU succès → même message ambigu
-  // que l'écran de connexion : pas d'oracle d'existence du compte.
-  const envoyerNouveauMotDePasse = async () => {
-    definirEtapeMdp('envoi');
+  // Mot de passe : PUT /user {password: SHA256(mail_courant + clair)} (§5.10).
+  // La promesse se résout UNIQUEMENT sur 200 : toute erreur (400/403, réseau,
+  // session morte) lève avant. Sur 200 → déconnexion complète (§ en-tête) :
+  // reset tranche persistée + purge + router.replace('/login'), centralisés
+  // dans quitterSession.
+  const enregistrerMotDePasse = async () => {
+    if (!peutEnvoyerMdp) return;
+    setEnEnvoiMdp(true);
     setMessage(null);
     try {
-      await renouvelerMotDePasse(utilisateur.mail);
-      setMessage({
-        texte: 'Mot de passe renouvelé : un courriel part avec le nouveau. L’actuel ne fonctionnera plus pour la connexion.',
-        erreur: false,
-      });
+      await modifierUtilisateurServeur({ motDePasseClair: motDePasse });
+      quitterSession();
     } catch (erreur) {
-      const libelle = (erreur as Error).message;
-      if (erreur instanceof ErreurApi && libelle === 'Forbidden') {
-        setMessage({
-          texte: 'Demande envoyée : un courriel avec le nouveau mot de passe arrivera si le compte est reconnu.',
-          erreur: false,
-        });
-      } else {
-        setMessage({ texte: libelle, erreur: true });
-      }
-    } finally {
-      definirEtapeMdp('repos');
+      if (erreur instanceof ErreurSession) return;
+      setMessage({ texte: (erreur as Error).message, erreur: true });
+      setEnEnvoiMdp(false);
     }
   };
 
@@ -111,50 +145,6 @@ export default function MairieEcran() {
             returnKeyType="done"
           />
 
-          <Text style={styles.label}>Mot de passe</Text>
-          {etapeMdp === 'repos' && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.boutonLien,
-                !mdpDisponible && styles.boutonDesactive,
-                pressed && mdpDisponible && styles.boutonAppuye,
-              ]}
-              disabled={!mdpDisponible}
-              onPress={() => definirEtapeMdp('confirme')}
-            >
-              <Text style={styles.boutonTexte}>Recevoir un nouveau mot de passe par e-mail</Text>
-            </Pressable>
-          )}
-
-          {etapeMdp !== 'repos' && (
-            <View style={styles.blocCompose}>
-              {etapeMdp === 'confirme' && (
-                <Text style={styles.avertissement}>
-                  Un mot de passe aléatoire sera créé par le serveur et envoyé à&nbsp;:
-                  {'\n' + (utilisateur.mail || '—') + '\n'}
-                  Ton mot de passe actuel cessera de fonctionner pour la connexion.
-                </Text>
-              )}
-              {etapeMdp === 'confirme' && (
-                <View style={styles.ligneBoutons}>
-                  <Pressable
-                    style={({ pressed }) => [styles.bouton, styles.boutonMoitie, styles.boutonDanger, pressed && styles.boutonAppuye]}
-                    onPress={envoyerNouveauMotDePasse}
-                  >
-                    <Text style={styles.boutonTexte}>Confirmer</Text>
-                  </Pressable>
-                  <Pressable
-                    style={({ pressed }) => [styles.bouton, styles.boutonMoitie, styles.boutonAnnule, pressed && styles.boutonAnnuleAppuye]}
-                    onPress={() => definirEtapeMdp('repos')}
-                  >
-                    <Text style={styles.boutonAnnuleTexte}>Annuler</Text>
-                  </Pressable>
-                </View>
-              )}
-              {etapeMdp === 'envoi' && <Text style={styles.texteEtat}>Demande envoyée au serveur…</Text>}
-            </View>
-          )}
-
           <Pressable
             style={({ pressed }) => [
               styles.bouton,
@@ -167,16 +157,84 @@ export default function MairieEcran() {
             <Text style={styles.boutonTexte}>Enregistrer</Text>
           </Pressable>
 
+          <Text style={[styles.label, styles.labelMdp]}>Nouveau mot de passe</Text>
+          <View style={styles.champMdp}>
+            <TextInput
+              style={styles.champMdpSaisie}
+              placeholder="Mot de passe"
+              placeholderTextColor="#9ca3af"
+              secureTextEntry={!afficherMdp}
+              autoCapitalize="none"
+              autoCorrect={false}
+              value={motDePasse}
+              onChangeText={(texte) => {
+                setMotDePasse(texte);
+                setMessage(null);
+              }}
+            />
+            <Pressable hitSlop={8} onPress={() => setAfficherMdp(!afficherMdp)}>
+              <Text style={styles.oeil}>{afficherMdp ? 'Masquer' : 'Afficher'}</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.indicateur}>
+            {evaluation.regles.map((regle) => (
+              <View
+                key={regle.id}
+                style={[
+                  styles.indicateurSegment,
+                  { backgroundColor: regle.passe ? couleurNiveau : COULEUR_SEGMENT_VIDE },
+                ]}
+              />
+            ))}
+            {evaluation.niveau && (
+              <Text style={[styles.indicateurTexte, { color: couleurNiveau }]}>
+                {NIVEAU_LIBELLE[evaluation.niveau]}
+              </Text>
+            )}
+          </View>
+
+          <View style={styles.regles}>
+            {evaluation.regles.map((regle) => (
+              <View key={regle.id} style={styles.regle}>
+                <View
+                  style={[
+                    styles.reglePuce,
+                    regle.passe ? styles.reglePuceOui : styles.reglePuceNon,
+                  ]}
+                />
+                <Text style={regle.passe ? styles.regleTexteOui : styles.regleTexteNon}>
+                  {regle.libelle}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.bouton,
+              !peutEnvoyerMdp && styles.boutonDesactive,
+              pressed && peutEnvoyerMdp && styles.boutonAppuye,
+            ]}
+            onPress={enregistrerMotDePasse}
+            disabled={!peutEnvoyerMdp}
+          >
+            <Text style={styles.boutonTexte}>
+              {enEnvoiMdp ? 'Envoi…' : 'Enregistrer le mot de passe'}
+            </Text>
+          </Pressable>
+
+          {!sessionActive && (
+            <Text style={styles.sansSession}>
+              Sans session serveur (compte debug), le mot de passe reste inchangé.
+            </Text>
+          )}
+
           {message && (
             <Text style={message.erreur ? styles.erreur : styles.messageSucces}>
               {message.texte}
             </Text>
           )}
-
-          <Text style={styles.astuce}>
-            Le nickname modifié est conservé sur cet appareil ; la synchronisation
-            serveur arrivera avec l’endpoint dédié.
-          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -229,6 +287,9 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginBottom: 4,
   },
+  labelMdp: {
+    marginTop: 4,
+  },
   input: {
     height: 48,
     borderWidth: 1,
@@ -240,62 +301,88 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     marginBottom: 14,
   },
+  champMdp: {
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 12,
+    marginBottom: 10,
+  },
+  champMdpSaisie: {
+    flex: 1,
+    height: '100%',
+    paddingHorizontal: 14,
+    fontSize: 15,
+    color: '#1f2937',
+  },
+  oeil: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2e7d32',
+  },
+  indicateur: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 8,
+  },
+  indicateurSegment: {
+    flex: 1,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: COULEUR_SEGMENT_VIDE,
+  },
+  indicateurTexte: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  regles: {
+    columnGap: 12,
+    rowGap: 4,
+    marginBottom: 12,
+  },
+  regle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reglePuce: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  reglePuceOui: {
+    backgroundColor: '#22c55e',
+  },
+  reglePuceNon: {
+    backgroundColor: '#d1d5db',
+  },
+  regleTexteOui: {
+    fontSize: 12,
+    color: '#166534',
+  },
+  regleTexteNon: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  sansSession: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 10,
+    textAlign: 'center',
+  },
   bouton: {
     height: 48,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#43a047',
-    marginTop: 6,
-  },
-  boutonLien: {
-    height: 48,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#43a047',
-    marginBottom: 14,
-  },
-  boutonDanger: {
-    backgroundColor: '#c62828',
-  },
-  boutonAnnule: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-  },
-  boutonAnnuleAppuye: {
-    backgroundColor: '#f3f4f6',
-  },
-  boutonAnnuleTexte: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#6b7280',
-  },
-  blocCompose: {
     marginTop: 2,
-  },
-  ligneBoutons: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  boutonMoitie: {
-    flex: 1,
-  },
-  avertissement: {
-    fontSize: 13,
-    color: '#374151',
-    backgroundColor: '#fef4f2',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  texteEtat: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
   },
   boutonAppuye: {
     backgroundColor: '#3b8b40',
@@ -320,11 +407,5 @@ const styles = StyleSheet.create({
     color: '#c62828',
     textAlign: 'center',
     marginTop: 12,
-  },
-  astuce: {
-    fontSize: 12,
-    color: '#9ca3af',
-    marginTop: 18,
-    textAlign: 'center',
   },
 });

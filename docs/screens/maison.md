@@ -31,3 +31,5 @@ Route : `/maison` — fichier `src/components/maison-ecran.tsx`
 - Contrat : `integration-client.md` à la racine (§5.4 liste sans noms ; §5.5 fichier ; §6.6 cache collection).
 - Le **nom** affiché vient de `datas.json` (hash path du `.cdz`) — la liste serveur ne le porte pas.
 - La génération de cartes se passe dans la fenêtre **usine** (§5.3 / §5.7).
+- **Web (2026-11-03)** : la route n'apparaît pas dans l'URL du navigateur — règle
+  globale d'URL figée à la racine (`src/utils/figerUrl.ts`, cf. `docs/architecture.md`).

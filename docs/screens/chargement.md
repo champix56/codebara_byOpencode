@@ -38,3 +38,7 @@ Les libellés/la durée restent centralisés en constantes (`TASKS`, `TASK_DURAT
 
 - L'interval est nettoyé à l'unmount (pas de fuite, pas de navigation en double).
 - L'image chargée est la même source que l'icône de l'app (`assets/icon.png`, l'œuf).
+- **Web (2026-11-03)** — l'écran est TOUJOURS le premier affiché : tout deep link
+  tapé dans la barre d'adresse (…/maison…) est ramené devant le splash par le
+  layout racine (`src/utils/figerUrl.ts` + `_layout.tsx`), et l'URL du navigateur
+  reste à la racine pendant toute l'app (règle : `docs/architecture.md` § Web).

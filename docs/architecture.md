@@ -38,7 +38,7 @@ codEbara/
 │   ├── components/      # carte-interactive, bandeau-pub, menu-lateral, fenetre-vierge, usine-ecran(.web), fabrication-carte, maison-ecran, carte-detail, mairie-ecran
 │   ├── services/        # api.ts (client HTTP serveur) + collection.ts (cache .cdz par utilisateur)
 │   ├── store/           # Redux Toolkit — tranche utilisateur persistée (store, utilisateur, hooks)
-│   ├── utils/           # Règles métier pures (codes-bar.ts ; hash.ts SHA-256 §3.2 ; motDePasse.ts règle §5.10 ; base64.ts ; cdz.ts ZIP/.cdz §5.3-§6.3)
+│   ├── utils/           # Règles métier pures (codes-bar.ts ; hash.ts SHA-256 §3.2 ; motDePasse.ts règle §5.10 ; base64.ts ; cdz.ts ZIP/.cdz §5.3-§6.3 ; figerUrl.ts — URL figée web)
 │   └── data/            # Données de l'app (carte.ts généré)
 ├── scripts/             # Outils de génération (extraire-carte-svg.mjs)
 ├── app.config.ts        # Config dynamique — lit DEBUG → extra.debug (bouton debug)
@@ -68,6 +68,40 @@ Stack racine sans en-têtes, sept routes :
 | `/maison` `/boutique` `/arene` | `src/app/{maison,boutique,arene}.tsx` | Collection / fenêtres vierges |
 
 Flux : `/` exécute ses tâches puis `router.replace('/login')` — l'écran de chargement est retiré de la pile, donc impossible d'y revenir au bouton retour. Depuis `/login`, `router.replace('/principal')` ; les zones de la carte ouvrent les fenêtres via `router.push` (retour par chevron ou geste système).
+
+## Web — URL figée à la racine (exigence produit, 2026-11-03)
+
+Dans le navigateur, **l'URL ne doit jamais quitter la base de l'app** : aucune route
+(`…/login`, `…/maison`, `…/carte/4…`) n'y apparaît, et la construction des fenêtres
+repart toujours du splash. Deux dispositifs (« web only », sans effet en natif) :
+
+- `src/utils/figerUrl.ts` — posé au **niveau module** de `src/app/_layout.tsx`
+  (donc au chargement du bundle par `expo-router/entry`, avant la première
+  écriture du router) : réécriture de `history.pushState` / `history.replaceState`
+  pour que toute écriture cible la racine `/`. L'écran affiché reste 100 % piloté
+  par le router ; seul le chemin de la barre d'adresse est figé. Le `state`
+  react-navigation est conservé (le bouton arrière du navigateur continue de
+  remonter les fenêtres, adresse inchangée). Idempotent (marqueur sur `window`),
+  silencieux hors navigateur.
+- `_layout.tsx` (effet de montage) — **lien profond tapé à la main** : l'URL
+  initiale est mémoïsée dès le chargement du bundle ; si elle n'est pas la racine,
+  l'entrée d'historique est remise à `/` et `router.replace('/')` replie le flux
+  sur le splash (auto-connexion par tokens → principal, cf. `screens/chargement.md`).
+
+Vérifié headless Chrome + DevTools le 2026-11-03 : deep link `/maison` → URL `/` +
+connexion après splash ; navigation réelle debug → principal puis menu latéral →
+maison, URL toujours `/` ; `pushState('/principal')` / `replaceState('/carte/4')`
+réécrits vers `/` (state conservé). Contrôles hors navigateur :
+`node --experimental-strip-types scripts/verifier-figer-url.mjs` (6 cas du
+module : capture initiale, réécriture push/replace, idempotence, remise à la
+racine, silence hors navigateur).
+
+Note annexe — warning `useNativeDriver` (Animated) : absent sur web (module natif
+manquant) → `menu-lateral.tsx` pose `useNativeDriver: Platform.OS !== 'web'` ;
+natif inchangé (plus le message « Falling back to JS-based animation »).
+Export statique (`npx expo export --platform web`) : la page servie est
+`index.html` — à l'image du web en dev, aucun autre chemin n'a d'existence
+côté hébergeur (aucune route ne doit être adressable de toute façon).
 
 ## État global (Redux Toolkit)
 

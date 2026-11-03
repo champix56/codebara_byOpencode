@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { persistor } from '../store/store';
@@ -34,7 +34,10 @@ export default function MenuLateral({ ouvert, onFermer }: Props) {
     Animated.timing(progression, {
       toValue: ouvert ? 1 : 0,
       duration: 200,
-      useNativeDriver: true,
+      // Web : le module animé natif est absent (react-native-web) — piloter
+      // l'animation en JS évite le message « useNativeDriver is not supported
+      // … Falling back to JS-based animation » dans la console du navigateur.
+      useNativeDriver: Platform.OS !== 'web',
     }).start();
   }, [ouvert, progression]);
 

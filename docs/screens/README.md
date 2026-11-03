@@ -6,7 +6,7 @@ Un fichier Markdown par écran (« fenêtre ») de l'application. Règle constan
 
 | Fichier | Écran | Dernière mise à jour |
 | --- | --- | --- |
-| [chargement.md](./chargement.md) | Écran de chargement (route `/`) — barre 4 s + reprise de session par tokens (serveur pyCodebara2) | 2026-10-31 |
+| [chargement.md](./chargement.md) | Écran de chargement (route `/`) — barre 4 s + reprise de session par tokens (serveur pyCodebara2) — web : toujours premier écran, URL figée | 2026-11-03 |
 | [connexion.md](./connexion.md) | Connexion / création de compte (route `/login`) — vrai serveur (`GET /user/auth`, `POST /user`) + bouton debug | 2026-10-31 |
 | [principal.md](./principal.md) | Fenêtre principale (route `/principal`) — carte plein écran, zones data-action taponables, bandeau publicitaire bas | 2026-10-30 |
 | [usine.md](./usine.md) | Usine (route `/usine`) — scanner + fabrique : `POST /card` → popup éclosion (front + nom obligatoire) → `PUT /card/name` → stockage `<idUser>/<id>.cdz` | 2026-11-03 |

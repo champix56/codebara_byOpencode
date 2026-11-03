@@ -20,6 +20,36 @@ npm run ios        # + cible iOS
 npm run web        # + cible Web
 ```
 
+## Débogage web (Chrome / VS Code)
+
+En dev web, le serveur Metro ne sert qu'**un seul bundle** —
+`localhost:8081/node_modules/expo-router/entry.bundle` (toute l'app inlinée,
+~1 000 modules) — accompagné d'**une seule sourcemap « sectionnée »** (~10 Mo,
+une section par module, validée 2026-11-03 : 1 020 sections, 36 fichiers `src/`,
+contenu embarqué). Conséquence dans l'onglet **Sources** de DevTools : il
+n'existe pas de nœud `localhost:8081/src/…` — l'arbre paraît vide tant qu'on
+n'a pas déplié l'entrée du bundle, et la map est chargée de façon paresseuse
+(quelques secondes de blanc). Chrome moderne le parse sans problème (155,
+vérifié).
+
+- Le plus rapide : Sources → `Ctrl+P` → taper `index.tsx`, `maison-ecran`,
+  `figerUrl`… → le fichier TS/TSX s'ouvre directement (les sources mappées sont
+  cherchables), points d'arrêt posables.
+- Sinon : déplier `localhost:8081 → node_modules/expo-router/entry.bundle` et
+  attendre l'affichage des fichiers.
+- Si l'arborescence reste vide : ⚙ DevTools → préférences **Sources** →
+  « Enable JavaScript source maps » + cache réseau désactivé + rechargement dur.
+- Déboguer **uniquement via le serveur de dev** : l'export
+  `npx expo export --platform web` (`dist/`) sert un bundle de production
+  minifié **sans sourcemap** — à peine lisible dans les Sources.
+- VS Code : `.vscode/launch.json` (« codEbara web (Chrome) ») lance un Chrome
+  instrumenté et pose les points d'arrêt directement dans les `.ts/.tsx` de
+  l'éditeur — la règle `sourceMapPathOverrides` ramène les chemins absolus de
+  la map au workspace.
+- À ne pas confondre : la touche `j` d'Expo CLI ouvre les React Native DevTools
+  pour l'app **native** ; sur web, c'est le DevTools Chrome standard.
+
+
 ## Vérifications
 
 À exécuter avant de déclarer une tâche terminée :

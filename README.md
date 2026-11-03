@@ -1,6 +1,6 @@
 # codEbara
 
-Application mobile (iOS / Android) et web **Expo / React Native**. Une carte plein écran à zones interactives ouvre des fenêtres dédiées : **usine** (scanneur de codes-barres), **maison** (collection de cartes), **mairie** (informations personnelles), **boutique**, **arène** ; écran de connexion branché sur le **serveur pyCodebara2**, bandeau publicitaire et menu latéral de navigation.
+Application mobile (iOS / Android) et web **Expo / React Native**. Une carte plein écran à zones interactives ouvre des fenêtres dédiées : **usine** (scanner de codes-barres + fabrication des cartes), **maison** (collection de cartes avec détail), **mairie** (informations personnelles), **boutique**, **arène** ; écran de connexion branché sur le **serveur pyCodebara2**, bandeau publicitaire et menu latéral de navigation.
 
 ## Stack
 
@@ -12,7 +12,9 @@ Application mobile (iOS / Android) et web **Expo / React Native**. Une carte ple
 | Expo Router | file-based routing | Navigation (`src/app/` = routes) |
 | Redux Toolkit | 2.13 | État global (tranche utilisateur **persistée** via redux-persist + AsyncStorage) |
 | expo-camera | ~58 | Scanneur de codes-barres (EAN-8, EAN-13, UPC-A, UPC-E) |
-| expo-crypto | ~58 | SHA-256 du mot de passe (contrat serveur §3.2) + polyfill `crypto` (devtools natif) |
+| expo-crypto | ~58 | SHA-256 du mot de passe (§3.2) **et des octets** des archives `.cdz` (§6.3) + polyfill `crypto` (devtools natif) |
+| expo-file-system | ~58 | Cache collection `<idUser>/<id>.cdz` (§6.6, sandbox app ; web → IndexedDB custom) |
+| jszip | 3.10 | Lecture des archives `.cdz` de cartes (ZIP DEFLATE, seul format géré) |
 
 ## Démarrage
 
@@ -44,6 +46,9 @@ Contrat : [`/home/champix/projets/pyCodebara2/docs/integration-client.md`](../py
 - **Mot de passe oublié / renouvellement** : `POST /user/renew-password {"mail"}` (§5.9, ajouté 2026-10-30) — disponible depuis le lien « Mot de passe oublié ? » de la connexion ; réponse **sans token** (pas de rotation) ; erreur 403 `Forbidden` volontairement **ambiguë** (mail mal formé ou compte inconnu) → message ambigu « si ce compte existe… ». En `DEBUG=True` serveur : pas d'e-mail (mot de passe dans le log du serveur).
 - La **modification** du profil : `PUT /user` (§5.10, ajouté 2026-10-30, tokens requis) depuis la fenêtre **mairie** — nickname envoyé au serveur ; **mot de passe saisi par l'utilisateur** : règle validée **côté client** (caractère spécial + minuscule + majuscule + chiffre + plus de 7 caractères — l'app est plus stricte que le serveur, qui ne contrôle que la forme du hash), hachée `SHA256(mail_courant + clair)` (§3.2), et **sur 200 → déconnexion** (purge + retour connexion). Un changement de mail sans mot de passe est refusé (403) par le contrat.
 - Bouton debug : le compte GOD chargé n'a **pas** de session — appels protégés inertes tant qu'aucune vraie connexion n'a eu lieu.
+- **Usine (fabrication de cartes)** : code-barres scanné/saisi → `POST /card {cb}` (§5.3, timeout dédié 150 s — génération IA synchrone jusqu'à 2 min) → archive `.cdz` (ZIP) serveur en base64 → contrôle `sha256(bytes) == checksum` (§6.3, re-téléchargement `GET /card/{id}` en cas d'écart) → stockage **v1** `<idUser>/<id>.cdz` → popup « éclosion » (front.png + **nom obligatoire**) → `PUT /card/name {cid, name}` (§5.7) → validation du zip **v2** (ZIP uniquement — le tar.xz du bug serveur §5.7 est refusé, la v1 reste en cache) → v2 remplace v1 + index du nom. Dépendances : `jszip` (lecture ZIP pure JS) + `expo-file-system` (natif).
+- **Stockage local par utilisateur** (« accessible uniquement par l'application ») : natif — `<documentDirectory>/<idUser>/<carteId>.cdz` + `index.json` (sandbox privé de l'app) ; web — **IndexedDB** custom (`codebara-cdz`, expo-file-system natif-only, re-téléchargement serveur à la demande). Géré par `src/services/collection.ts`.
+- **Maison (collection)** : `GET /card` (§5.4 — ne liste que les cartes de la session), noms depuis l'index local ; chaque ligne ouvre la fenêtre détail `/carte/[id]` : front.png en grand + perso + stats `datas.json` (§6.4), archive depuis le cache local ou `GET /card/{id}` (§5.5) avec validation complète.
 
 ## Débogage (DEBUG)
 
@@ -81,11 +86,11 @@ node scripts/extraire-carte-svg.mjs
 
 ```text
 src/
-├── app/          # Routes Expo Router (un fichier = un écran)
-├── components/   # carte-interactive, bandeau-pub, menu-lateral, usine-ecran(.web)…
-├── services/     # api.ts — client HTTP serveur pyCodebara2 (auth, rotation, cartes)
+├── app/          # Routes Expo Router (un fichier = un écran) — + carte/[id] détail
+├── components/   # carte-interactive, bandeau-pub, menu-lateral, usine-ecran(.web), fabrication-carte, maison-ecran, carte-detail…
+├── services/     # api.ts (client HTTP) + collection.ts (cache .cdz par utilisateur)
 ├── store/        # Redux : store + tranche utilisateur persistée + hooks typés
-├── utils/        # Règles métier pures (codes-bar, mot de passe SHA-256)
+├── utils/        # Règles métier pures (codes-bar, base64, cdz ZIP, hash, mot de passe)
 └── data/         # carte.ts (généré) — géométrie + zones taponables
 docs/             # architecture, conventions, conventions écrans (docs/screens/*)
 scripts/          # outils de génération

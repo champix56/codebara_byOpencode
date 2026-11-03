@@ -1,38 +1,48 @@
-# Fenêtre usine (scanneur de codes-barres)
+# Fenêtre usine (scanner + fabrication de carte)
+
+Route : `/usine` — fichiers `src/components/usine-ecran.tsx` (natif) / `usine-ecran.web.tsx` (web), popup partagée `src/components/fabrication-carte.tsx`
 
 ## Rôle
 
-Route `/usine` : scanner de codes-barres produits — **EAN-8, EAN-13, UPC-A et UPC-E** — via la caméra sur iOS/Android. Sur le web (pas de caméra exploitable dans Expo) : formulaire de saisie manuelle, qui accepte en plus l'UPC-B.
+Scanner de codes-barres produits (EAN-8, EAN-13, UPC-A, UPC-E via caméra ; + UPC-B en saisie web) puis **fabrication de la carte** : `POST /card {cb}` (§5.3) → archive `.cdz` → popup « éclosion » (front + nom OBLIGATOIRE) → `PUT /card/name` (§5.7) → version finale stockée localement.
 
 ## Structure visuelle
 
-### Natif (`src/components/usine-ecran.tsx`)
+### Natif — scanner
 
-- `CameraView` plein écran sur fond noir, scanneur restreint aux 4 types (`ean8`, `ean13`, `upc_a`, `upc_e`).
-- Barre de navigation native : titre « Usine » + bouton de retour natif (web compris).
-- Panneau blanc en bas de la prévisualisation : astuce (« Visez un code-barres… ») puis dernier scan — libellé du format + badge « Code valide » (vert) / « Clé de contrôle invalide » (rouge) + les chiffres.
+- `CameraView` plein écran, scanneur restreint aux 4 types ; panneau blanc en bas : astuce, dernier scan (format + badge valide/invalide + chiffres).
+- Sous le chiffre : bouton vert **« Fabriquer la carte »** (désactivé si code invalide, sans session, popup déjà ouverte) + note grise « Sans session serveur, la fabrication est indisponible. » ; message d'état (vert/rouge) dans le panneau.
 
-### Web (`src/components/usine-ecran.web.tsx`)
+### Web — saisie
 
-- Titre, aide listant les formats, champ numérique 13 caractères max (séparateurs filtrés).
-- Libellé live du format détecté (vert si valide, rouge sinon), bouton « Valider le code » désactivé tant que non valide.
-- Après validation : « Code X prêt — en attente du serveur (branchement à venir) » (TODO).
+- Titre, aide formats, champ numérique, libellé live, bouton **« Fabriquer la carte »** (désactivé tant que non valide ou sans session), message d'état.
+
+### Popup « fabrication » (Modal, partagée natif/web)
+
+- **Génération** : spinner vert + « Génération en cours — … jusqu'à 2 minutes » (fermeture non proposée pendant l'attente).
+- **Éclosion** : titre « Éclosion — carte #id », `front.png` du zip affiché tel quel (600×1037, data URI), champ « Nom de la carte » (placeholder « Obligatoire », 60 car. max), bouton « Envoyer le nom » (désactivé si vide ou en envoi — libellé « Envoi… »).
+- **Sans fichier** (réponse asynchrone §5.3 à venir) : « Carte #id créée — apparaîtra dans la maison une fois finalisée » + « Compris ».
+- **Erreur** : titre « Échec de fabrication », message rouge, bouton gris « Fermer ».
 
 ## États
 
-- **Natif** : 1) permission en cours de résolution (« Préparation de la caméra… ») ; 2) caméra refusée → écran dédié « Activer la caméra » + lien « Ouvrir les réglages » ; 3) caméra active → scan continu. Une seule demande automatique par ouverture ; anti-rafale : code identique ignoré 2,5 s.
-- **Web** : saisie vide → libellé caché ; saisie en cours → détection à la volée par la longueur (8 → EAN-8/UPC-E, 11 → UPC-B, 12 → UPC-A, 13 → EAN-13).
-- Règles de validation partagées et sans React : `src/utils/codes-bar.ts` (clé de contrôle EAN/UPC, expansion UPC-E selon le 6e chiffre).
+- **Scanner** : permission caméra (une demande auto / anti-rafale 2,5 s, cf. notes) ; `fabrication` (code soumis + popup ouverte), `message` parent.
+- **Popup — recette §6.1** : `POST /card` → base64 → octets → `sha256(bytes) == checksum` ; extraction ZIP + `hashs.json` internes ; **écart → re-téléchargement unique `GET /card/{id}`** puis re-validation ; **stockage immédiat de la v1** `<idUser>/<cardid>.cdz` ; puis popup éclosion.
+- **Renommage** : `PUT /card/name {cid, name}` → réponse `{cid, card}` SANS checksum → validation par extraction interne (signature ZIP + hashs.json) → **v2 remplace la v1** + index nom (`majIndex`). **ZIP uniquement** : une archive non-ZIP (bug serveur tar.xz §5.7, décision produit 2026-11-03) est refusée avec un message « la version d'origine reste dans la collection » — la v1 stockée fait foi.
+- Étapes internes : `generer` / `eclosion` / `sans-fichier` / `erreur` ; garde-fous anti setState après démontage.
+- Succession serveur inactif (§9.2) : 400 « Invalid Request with body… » → message dédié « Génération indisponible… » (jamais de déconnexion — le token reste bon).
+- Timeout `POST /card` : **150 s** (génération IA synchrone 10 s à 2 min, contrat §5.3) ; autres routes 10 s.
 
 ## Navigation
 
 - Entrée : tap la zone usine sur la carte (fenêtre principale).
-- Sortie : bouton retour de la barre de navigation native → `router.back()` (le geste système s'ajoute en natif).
+- Sortie : bouton retour natif → `router.back()` ; la fermeture de la popup ne quitte pas la fenêtre.
 
 ## Notes
 
-- Plugin `expo-camera` configuré dans `app.json` : `cameraPermission` en français, `microphonePermission: false` (aucun enregistrement), `recordAudioAndroid: false`, `barcodeScannerEnabled: true` — appliqué par la génération continue (CNG), il faut relancer `npx expo run:ios|android` (ou un build EAS) après modification.
-- Variante de plateforme : Metro choisit `usine-ecran.web.tsx` (formulaire) sur le web et `usine-ecran.tsx` (caméra) en natif, pour un même import.
-- Un seul appareil actif à la fois : la pile démonte la fenêtre au retour, ce qui coupe la caméra.
-- UPC-B (11 chiffres, National Drug Code, **sans clé de contrôle**) ne correspond à aucune symbologie de scanneur caméra : il n'est pas scannable nativement, il est accepté par validation structurelle dans le formulaire web.
-- Un code de 8 chiffres peut être ambigu (EAN-8 ou UPC-E affiché) : la clé valide dans les deux cas → libellé « formats confondus » ; côté natif, le type renvoyé par la caméra (type upc_e) lève le doute.
+- Le stockage passe par `src/services/collection.ts` : répertoire **par id utilisateur** — natif `<documentDirectory>/<idUser>/<carteId>.cdz` (sandbox privé : accessible uniquement par l'application), web IndexedDB (`codebara-cdz`).
+- Anti-rafale & permission caméra : cf. `docs/screens/usine.md` d'origine — inchangés.
+- Plugin `expo-camera` configuré dans `app.json` (CNG : relancer `npx expo run:ios|android` après modification).
+- Variante de plateforme : Metro choisit `usine-ecran.web.tsx` (formulaire) sur web et `usine-ecran.tsx` (caméra) en natif pour un même import ; `FabricationCarte` est unique aux deux.
+- UPC-B (11 chiffres, sans clé de contrôle) : accepté uniquement en saisie web.
+- Déterminisme (§9.4) : deux scans du même code + même saison → même illustration.

@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { ErreurSession, listerCartes, type CarteListee } from '../services/api';
+import { lireIndex } from '../services/collection';
 import { useAppSelector } from '../store/hooks';
 
-// Fenêtre maison : liste des cartes en possession du joueur — GET /card du
-// serveur pyCodebara2 (contrat §5.4) : id, checksum, puissance, santé, attaque.
-// Le rendu graphique et le nom viendront du fichier .cdz (perso.png / datas.json,
-// GET /card/{id}) — ici, la liste brute fait foi pour la collection.
+// Fenêtre maison : liste des cartes en possession du joueur courant —
+// GET /card du serveur pyCodebara2 (contrat §5.4), porteur du second token :
+// la réponse ne liste QUE les cartes de l'utilisateur de la session. Le nom
+// n'est pas dans la liste : il vient de l'index local (datas.json du .cdz,
+// src/services/collection) ; entrée absente → « Carte #id ». Chaque ligne
+// ouvre la fenêtre détail /carte/[id] (archive locale ou GET /card/{id}).
 type EtatListe =
   | { phase: 'chargement' }
   | { phase: 'pret' }
@@ -15,9 +19,10 @@ type EtatListe =
   | { phase: 'erreur'; message: string };
 
 export default function MaisonEcran() {
-  const { apiToken, requestToken } = useAppSelector((etat) => etat.utilisateur);
+  const { apiToken, requestToken, idUser } = useAppSelector((etat) => etat.utilisateur);
   const [etat, definirEtat] = useState<EtatListe>({ phase: 'chargement' });
   const [cartes, definirCartes] = useState<CarteListee[]>([]);
+  const [noms, definirNoms] = useState<Record<string, string>>({});
   const [rafraichit, definirRafraichit] = useState(false);
 
   const charger = useCallback(
@@ -31,6 +36,20 @@ export default function MaisonEcran() {
       try {
         const liste = await listerCartes();
         definirCartes(liste);
+        // Index local des noms (datas.json du .cdz, §6.6) — absent de la
+        // liste serveur. Une frappe latérale : échec ignoré, noms « # ».
+        if (idUser !== null) {
+          try {
+            const index = await lireIndex(idUser);
+            definirNoms(
+              Object.fromEntries(
+                Object.entries(index).map(([cle, entree]) => [cle, entree.nom]),
+              ),
+            );
+          } catch {
+            definirNoms({});
+          }
+        }
         definirEtat(liste.length === 0 ? { phase: 'vide' } : { phase: 'pret' });
       } catch (erreur) {
         if (erreur instanceof ErreurSession) {
@@ -43,7 +62,7 @@ export default function MaisonEcran() {
         definirRafraichit(false);
       }
     },
-    [apiToken, requestToken],
+    [apiToken, requestToken, idUser],
   );
 
   useEffect(() => {
@@ -87,18 +106,28 @@ export default function MaisonEcran() {
 
       {etat.phase === 'pret' && (
         <View style={styles.liste}>
-          {cartes.map((carte) => (
-            <View key={carte.id} style={styles.carte}>
-              <Text style={styles.carteId}>#&nbsp;{carte.id}</Text>
-              <Text style={styles.carteStats}>
-                Puissance&nbsp;: {carte.cardpower ?? '—'}&nbsp; Santé&nbsp;:{' '}
-                {carte.health ?? '—'}&nbsp; Attaque&nbsp;: {carte.attack ?? '—'}
-              </Text>
-              <Text style={styles.carteHash} numberOfLines={1}>
-                {carte.cardHash}
-              </Text>
-            </View>
-          ))}
+          {cartes.map((carte) => {
+            const nom = noms[String(carte.id)] || '';
+            return (
+              <Pressable
+                key={carte.id}
+                style={({ pressed }) => [styles.carte, pressed && styles.carteAppuyee]}
+                onPress={() => router.push(`/carte/${carte.id}`)}
+                accessibilityLabel={`Carte ${nom !== '' ? nom : carte.id} — ouvrir le détail`}
+              >
+                <Text style={styles.carteId}>
+                  {nom !== '' ? nom : `Carte #${carte.id}`}
+                </Text>
+                <Text style={styles.carteStats}>
+                  Puissance&nbsp;: {carte.cardpower ?? '—'}&nbsp; Santé&nbsp;:{' '}
+                  {carte.health ?? '—'}&nbsp; Attaque&nbsp;: {carte.attack ?? '—'}
+                </Text>
+                <Text style={styles.carteHash} numberOfLines={1}>
+                  {carte.cardHash}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
       )}
     </ScrollView>
@@ -138,6 +167,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     gap: 4,
+  },
+  carteAppuyee: {
+    backgroundColor: '#e8f5e9',
   },
   carteId: {
     fontSize: 16,

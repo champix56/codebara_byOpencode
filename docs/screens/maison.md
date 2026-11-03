@@ -1,33 +1,33 @@
-# Fenêtre maison
+# Fenêtre maison (collection)
+
+Route : `/maison` — fichier `src/components/maison-ecran.tsx`
 
 ## Rôle
 
-Route `/maison` : **liste des cartes en possession** du joueur — le résultat de `GET /card` du serveur pyCodebara2 (contrat §5.4 id, checksum, puissance, santé, attaque). Origine : la modification du profil a été déplacée vers la fenêtre mairie.
+**Liste des cartes d'un utilisateur courant** — `GET /card` (contrat §5.4, tokens requis : la réponse ne porte QUE les cartes de la session). Le nom n'est pas dans la liste : il vient de l'index local du cache (`<idUser>/index.json`, alimenté aux renommages). Chaque ligne ouvre le **détail** de la carte (route `/carte/[id]`).
 
 ## Structure visuelle
 
-- Fond blanc, `ScrollView` avec **tirer-pour-actualiser** (`RefreshControl`), contenu centré.
-- Titre « Mes cartes ».
-- Cartes : rangées grises arrondies — `# id` gras, ligne stats « Puissance / Santé / Attaque » (— si champ absent), checksum SHA-256 en small gris (1 ligne).
-- Sans session serveur : message « Connecte-toi au serveur pour voir la collection… » (compte debug ou jamais connecté).
-- Chargement : « Chargement de la collection… » ; collection vide : « Aucune carte encore — passe à l'usine scanner un code-barres ! ».
-- Erreur : message rouge du serveur + bouton vert « Réessayer ».
+- Fond blanc, `ScrollView` + tirer-pour-actualiser, contenu centré, titre « Mes cartes ».
+- Lignes pressables (trois vertis au tap) : **nom** (ou « Carte #id » si le nom n'est pas connu), stats serveur « Puissance / Santé / Attaque » (— si absents), checksum cardHash en petit gris (1 ligne).
+- États d'affichage : chargement (« Chargement de la collection… »), vide (« Aucune carte encore — passe à l'usine scanner un code-barres ! »), sans-session, erreur (rouge + bouton vert « Réessayer »).
 
 ## États
 
-- `etat` : `chargement` / `pret` / `vide` / `sans-session` / `erreur`.
-- Chargement **à l'ouverture uniquement** (`useEffect` + `charger`) ; tirer-pour-actualiser relance — un seul appel à la fois (les appels protégés sont **sérialisés** par le service, le couple de tokens ne pouvant servir qu'une fois, contrat §9.1).
-- Rotation des tokens appliquée au succès par `src/services/api.ts` (`renouvelerRequestToken`).
-- Mort de session (« Invalid REQUEST TOKEN ») : réinitialisation de la tranche **+ purger la persistance + redirection `/login`** centralisées dans le service ; l'écran ne fait rien d'autre.
-- `sans-session` si `apiToken`/`requestToken` absents (bypass debug).
+- `etat` : `chargement` / `pret` / `vide` / `sans-session` / `erreur` ; `cartes`, `noms` (Record id → nom, index local), `rafraichit`.
+- Chargement à l'ouverture uniquement ; tirer-pour-actualiser relance ; appels protégés **sérialisés** (contrat §9.1). Rotation du request-token au succès (service).
+- Mort de session (« Invalid REQUEST TOKEN ») : reset + purge + `/login` centralisés — l'écran ignore l'erreur.
+- Sans session : état dédié (bypass debug ou jamais connecté).
+- Échec de l'index local : ignoré silencieusement (noms « #id »).
 
 ## Navigation
 
-- Entrée : tap la zone maison sur la carte ou le menu latéral (fenêtre principale).
-- Sortie : bouton retour de la barre de navigation native → `router.back()` ; geste iOS en natif.
+- Entrée : tap la zone maison sur la carte ou le menu latéral.
+- Tap sur une ligne → `router.push(/carte/${id})` (fenêtre détail, push natif). Retour natif possible.
+- Sortie propre par bouton retour → `router.back()`.
 
 ## Notes
 
-- Le rendu graphique et le nom des cartes viendront du fichier `.cdz` (` perso.png`/`datas.json` via `GET /card/{id}` §5.5) — la liste brute règne pour l'instant.
-- La **génération** d'une carte (scan usine → `POST /card`, §5.3) n'est encore branchée — à faire dans la fenêtre usine.
-- Contrat : `/home/champix/projets/pyCodebara2/docs/integration-client.md`.
+- Contrat : `integration-client.md` à la racine (§5.4 liste sans noms ; §5.5 fichier ; §6.6 cache collection).
+- Le **nom** affiché vient de `datas.json` (hash path du `.cdz`) — la liste serveur ne le porte pas.
+- La génération de cartes se passe dans la fenêtre **usine** (§5.3 / §5.7).

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { detecterFormat, neRetenirQueChiffres } from '../utils/codes-bar';
+import { useAppSelector } from '../store/hooks';
+import FabricationCarte from './fabrication-carte';
 
 // Fenêtre usine côté web : la caméra du module expo-camera n'y fonctionne pas
 // (code natif), la saisie manuelle d'un code-barres la remplace. Le format est
@@ -8,12 +10,15 @@ import { detecterFormat, neRetenirQueChiffres } from '../utils/codes-bar';
 export default function UsineEcranWeb() {
   const [saisie, setSaisie] = useState('');
   const [codeSoumis, setCodeSoumis] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ texte: string; erreur: boolean } | null>(null);
+  const sessionActive = useAppSelector((etat) => etat.utilisateur.apiToken !== null);
 
   const chiffres = neRetenirQueChiffres(saisie);
   const detection = detecterFormat(chiffres);
 
   const soumettre = () => {
     if (!detection.valide) return;
+    setMessage(null);
     setCodeSoumis(chiffres);
   };
 
@@ -52,21 +57,36 @@ export default function UsineEcranWeb() {
         )}
 
         <Pressable
-          style={[styles.bouton, !detection.valide && styles.boutonDesactive]}
-          disabled={!detection.valide}
+          style={[styles.bouton, (!detection.valide || !sessionActive) && styles.boutonDesactive]}
+          disabled={!detection.valide || !sessionActive}
           onPress={soumettre}
         >
-          <Text style={[styles.boutonTexte, !detection.valide && styles.boutonTexteDesactive]}>
-            Valider le code
+          <Text style={[styles.boutonTexte, (!detection.valide || !sessionActive) && styles.boutonTexteDesactive]}>
+            Fabriquer la carte
           </Text>
         </Pressable>
 
-        {codeSoumis !== null && (
-          <Text style={styles.soumis}>
-            Code {codeSoumis} prêt — en attente du serveur (branchement à venir).
+        {!sessionActive && (
+          <Text style={styles.sansSession}>Sans session serveur, la fabrication est indisponible.</Text>
+        )}
+
+        {message && (
+          <Text style={message.erreur ? styles.erreur : styles.messageSucces}>
+            {message.texte}
           </Text>
         )}
       </View>
+
+      <FabricationCarte
+        chiffres={codeSoumis}
+        surFermer={() => setCodeSoumis(null)}
+        surEnregistree={(carteId, nom) =>
+          setMessage({
+            texte: `Carte #${carteId} « ${nom} » enregistrée — vois-la dans la maison.`,
+            erreur: false,
+          })
+        }
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -134,9 +154,20 @@ const styles = StyleSheet.create({
   boutonTexteDesactive: {
     color: '#9aa3ab',
   },
-  soumis: {
+  sansSession: {
+    fontSize: 12,
+    color: '#9aa3ab',
+    textAlign: 'center',
+  },
+  messageSucces: {
     fontSize: 13,
-    color: '#6b7280',
+    fontWeight: '600',
+    color: '#2e7d32',
+    textAlign: 'center',
+  },
+  erreur: {
+    fontSize: 13,
+    color: '#c62828',
     textAlign: 'center',
   },
 });

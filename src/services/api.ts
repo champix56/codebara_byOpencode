@@ -11,8 +11,11 @@ import { hacherMotDePasse } from '../utils/hash';
 // émulateur Android, http://<IP LAN>:8080 sur un téléphone physique, ou
 // http://localhost:8080 sur le web — CORS du serveur : localhost:8081/5173.
 const URL_BASE = process.env.EXPO_PUBLIC_SERVER_URL ?? 'http://localhost:8080';
-// Timeout des appels simples (contrat §2 : 5–10 s ; POST /card long — non utilisé ici).
+// Timeout des appels simples (contrat §2 : 5–10 s). La génération de carte
+// POST /card est LONGUE (illustration IA synchrone : plusieurs secondes à
+// ~1–2 min, §5.3) — timeout dédié bien plus généreux.
 const DELAI_APP_MS = 10_000;
+const DELAI_GENERATION_MS = 150_000;
 
 // Erreurs distinguées par le reste de l'app :
 // - ErreurSession : couple de tokens consommé (« Invalid REQUEST TOKEN ») →
@@ -65,9 +68,12 @@ async function lireJson(reponse: Response): Promise<Record<string, unknown>> {
   return (await reponse.json()) as Record<string, unknown>;
 }
 
-async function avecDelai(init: { url: string; method: string; headers: Record<string, string>; body?: string }): Promise<Record<string, unknown>> {
+async function avecDelai(
+  init: { url: string; method: string; headers: Record<string, string>; body?: string },
+  timeoutMs: number = DELAI_APP_MS,
+): Promise<Record<string, unknown>> {
   const controlé = new AbortController();
-  const minuteur = setTimeout(() => controlé.abort(), DELAI_APP_MS);
+  const minuteur = setTimeout(() => controlé.abort(), timeoutMs);
   try {
     const reponse = await fetch(init.url, {
       method: init.method,
@@ -127,7 +133,7 @@ export function quitterSession(): void {
 
 async function appelProtege(
   chemin: string,
-  options: { method?: string; corps?: Record<string, unknown>; datasExtra?: Record<string, unknown> } = {},
+  options: { method?: string; corps?: Record<string, unknown>; datasExtra?: Record<string, unknown>; timeout?: number } = {},
 ): Promise<Record<string, unknown>> {
   try {
     return await enFile(async () => {
@@ -135,19 +141,22 @@ async function appelProtege(
       if (!tokens.apiToken || !tokens.requestToken) {
         throw new ErreurApi('Aucune session : authentification serveur requise');
       }
-      const donnees = await avecDelai({
-        url: `${URL_BASE}${chemin}`,
-        method: options.method ?? 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          datas: JSON.stringify({
-            API_TOKEN: tokens.apiToken,
-            API_REQUEST_TOKEN: tokens.requestToken,
-            ...options.datasExtra,
-          }),
+      const donnees = await avecDelai(
+        {
+          url: `${URL_BASE}${chemin}`,
+          method: options.method ?? 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            datas: JSON.stringify({
+              API_TOKEN: tokens.apiToken,
+              API_REQUEST_TOKEN: tokens.requestToken,
+              ...options.datasExtra,
+            }),
+          },
+          body: options.corps === undefined ? undefined : JSON.stringify(options.corps),
         },
-        body: options.corps === undefined ? undefined : JSON.stringify(options.corps),
-      });
+        options.timeout ?? DELAI_APP_MS,
+      );
       // Rotation sur tout succès de route protégée (§3.3) — jamais sur erreur.
       const nouveauToken = texteValeur(donnees, 'API_REQUEST_TOKEN');
       if (nouveauToken) {
@@ -315,4 +324,96 @@ export async function listerCartes(): Promise<CarteListee[]> {
       health: nombreValeur(carte, 'health'),
       attack: nombreValeur(carte, 'attack'),
     }));
+}
+
+// ─── Génération de carte (§5.3 – POST /card, depuis l'usine) ────────────────
+
+// Résultat de la génération : en mode synchrone (actuel) `cardBase64` porte
+// l'archive .cdz complète ; en mode asynchrone (à venir, §5.3) elle est
+// absente et la carte devra être récupérée plus tard via GET /card/{id}.
+export type CarteGeneree = {
+  cardid: number;
+  checksum: string | null;
+  cardBase64: string | null;
+};
+
+export async function genererCarte(codeBarres: string): Promise<CarteGeneree> {
+  let donnees: Record<string, unknown>;
+  try {
+    donnees = await appelProtege('/card', {
+      method: 'POST',
+      corps: { cb: codeBarres },
+      timeout: DELAI_GENERATION_MS,
+    });
+  } catch (erreur) {
+    // §9.2 : le serveur d'IA (FastSDCPU) peut ne pas tourner — POST /card
+    // renvoie alors un 400 « Invalid Request with body… » masqué. Ce n'est
+    // PAS une session morte (ne jamais déconnecter ici) : message dédié.
+    const message = (erreur as Error).message;
+    if (erreur instanceof ErreurApi && message.includes('Invalid Request with body given')) {
+      throw new ErreurApi('Génération indisponible : le serveur d’IA ne répond pas. Réessaie plus tard.');
+    }
+    throw erreur;
+  }
+  const cardid = nombreValeur(donnees, 'cardid');
+  const card = texteValeur(donnees, 'card');
+  if (cardid === null || (card !== '' && card.length === 0)) {
+    throw new ErreurApi('Réponse de génération inattendue du serveur');
+  }
+  // card absent = réponse asynchrone (mode à venir) : l'app s'adapte (l'écran
+  // usine annoncera une création sans fichier, à aller chercher plus tard).
+  const checksum = texteValeur(donnees, 'checksum');
+  return { cardid, checksum: checksum || null, cardBase64: card || null };
+}
+
+// ─── Une carte (§5.5 – GET /card/{id}) ──────────────────────────────────────
+
+// Utilisée pour : premier téléchargement après une génération asynchrone,
+// re-remplissage du cache, rafraîchissement. `card` est TOUJOURS renvoyé par
+// le serveur (pas d'URL de fichier à deviner, §5.5). Le contrôle global se
+// fait contre `cardHash` (== checksum de génération, §6.3).
+export type CarteTelechargee = {
+  id: number;
+  cardHash: string | null;
+  cardpower: number | null;
+  health: number | null;
+  attack: number | null;
+  cardBase64: string;
+};
+
+export async function telechargerCarte(carteId: number): Promise<CarteTelechargee> {
+  const donnees = await appelProtege(`/card/${carteId}`);
+  const card = texteValeur(donnees, 'card');
+  if (!card) {
+    throw new ErreurApi('Réponse carte inattendue du serveur (fichier .cdz absente)');
+  }
+  return {
+    id: nombreValeur(donnees, 'id') ?? carteId,
+    cardHash: texteValeur(donnees, 'cardHash') || null,
+    cardpower: nombreValeur(donnees, 'cardpower'),
+    health: nombreValeur(donnees, 'health'),
+    attack: nombreValeur(donnees, 'attack'),
+    cardBase64: card,
+  };
+}
+
+// ─── Renommage (§5.7 – PUT /card/name, depuis l'usine) ──────────────────────
+
+// Réponse : même forme qu'une carte fraîchement mise à jour {cid, card} —
+// SANS checksum global : la vérification complète repose sur l'extraction
+// interne (signature ZIP + hashs.json, cf. src/utils/cdz.ts). Décision
+// produit (2026-11-03) : ZIP uniquement — un tar.xz issu du bug serveur
+// §5.7 est refusé (aucun fallback).
+export type CarteRenommee = {
+  cid: number;
+  cardBase64: string;
+};
+
+export async function renommerCarte(cid: number, name: string): Promise<CarteRenommee> {
+  const donnees = await appelProtege('/card/name', { method: 'PUT', corps: { cid, name } });
+  const card = texteValeur(donnees, 'card');
+  if (!card) {
+    throw new ErreurApi('Réponse de renommage inattendue du serveur (fichier .cdz absente)');
+  }
+  return { cid: nombreValeur(donnees, 'cid') ?? cid, cardBase64: card };
 }

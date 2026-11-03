@@ -3,6 +3,8 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import type { FormatCode } from '../utils/codes-bar';
 import { LIBELLE_FORMAT, detecterFormat, neRetenirQueChiffres, verifierCode } from '../utils/codes-bar';
+import { useAppSelector } from '../store/hooks';
+import FabricationCarte from './fabrication-carte';
 
 // Fenêtre usine côté natif (iOS / Android) : scanneur de codes-barres. Un seul
 // appareil actif à la fois — la fenêtre est démontée par la pile quand l'utilisateur
@@ -20,6 +22,10 @@ type Scan = { chiffres: string; format: FormatCode; valide: boolean };
 export default function UsineEcran() {
   const [permission, demanderPermission] = useCameraPermissions();
   const [dernierScan, setDernierScan] = useState<Scan | null>(null);
+  const [fabrication, definirFabrication] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ texte: string; erreur: boolean } | null>(null);
+  const apiToken = useAppSelector((etat) => etat.utilisateur.apiToken);
+  const sessionActive = apiToken !== null;
 
   // Anti-rafale : code identique ignoré quelques secondes.
   const memoireScan = useRef<{ code: string; depuis: number }>({ code: '', depuis: 0 });
@@ -46,6 +52,9 @@ export default function UsineEcran() {
       return;
     }
     memoireScan.current = { code: chiffres, depuis: maintenant };
+
+    // Un nouveau scan hors fabrication invalide le message précédent.
+    if (fabrication === null) setMessage(null);
 
     // Le type de la caméra fait foi — il lève l'ambiguïté EAN-8 / UPC-E ; sinon
     // (type inattendu) on retombe sur la détection par longueur.
@@ -115,9 +124,49 @@ export default function UsineEcran() {
               </Text>
             </View>
             <Text style={styles.codeScan}>{dernierScan.chiffres}</Text>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.boutonFabriquer,
+                (!dernierScan.valide || !sessionActive || fabrication !== null) &&
+                  styles.boutonFabriquerDesactive,
+                pressed &&
+                  dernierScan.valide &&
+                  sessionActive &&
+                  fabrication === null &&
+                  styles.boutonFabriquerAppuye,
+              ]}
+              disabled={!dernierScan.valide || !sessionActive || fabrication !== null}
+              onPress={() => definirFabrication(dernierScan.chiffres)}
+            >
+              <Text style={styles.boutonFabriquerTexte}>Fabriquer la carte</Text>
+            </Pressable>
+
+            {!sessionActive && (
+              <Text style={styles.sansSession}>
+                Sans session serveur, la fabrication est indisponible.
+              </Text>
+            )}
           </>
         )}
+
+        {message && (
+          <Text style={message.erreur ? styles.erreur : styles.messageSucces}>
+            {message.texte}
+          </Text>
+        )}
       </View>
+
+      <FabricationCarte
+        chiffres={fabrication}
+        surFermer={() => definirFabrication(null)}
+        surEnregistree={(carteId, nom) =>
+          setMessage({
+            texte: `Carte #${carteId} « ${nom} » enregistrée — vois-la dans la maison.`,
+            erreur: false,
+          })
+        }
+      />
     </View>
   );
 }
@@ -209,5 +258,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#111827',
     letterSpacing: 2,
+  },
+  boutonFabriquer: {
+    marginTop: 4,
+    height: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#43a047',
+  },
+  boutonFabriquerAppuye: {
+    backgroundColor: '#3b8b40',
+  },
+  boutonFabriquerDesactive: {
+    backgroundColor: '#a5d6a7',
+  },
+  boutonFabriquerTexte: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  sansSession: {
+    fontSize: 12,
+    color: '#9ca3af',
+    textAlign: 'center',
+  },
+  messageSucces: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#2e7d32',
+    textAlign: 'center',
+  },
+  erreur: {
+    fontSize: 13,
+    color: '#c62828',
+    textAlign: 'center',
   },
 });

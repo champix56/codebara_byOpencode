@@ -10,7 +10,7 @@ Fenêtre : `carte` — `App.tsx` monte `src/components/carte-detail.tsx` avec l'
 
 - Barre d'en-tête maison : titre « Carte » + bouton retour.
 - En-tête : avatar `perso.png` (≤256×256, arrondi) + nom (`datas.name`, « Carte #id » si vide) + `#id`.
-- **Visuel 3D (`visuel-carte.tsx`, 300 px)** : faces `front.png` / `back.png` sur un plan à perspective — glissement **horizontal** = rotation complète (360° libres, le dos apparaît passé 90°), glissement **vertical** = inclinaison bornée ±30° qui révèle les **reflets de lumière** (bandes translucides glissant avec la rotation, intensifiées par l'inclinaison). Pointeur (web) ou doigt (natif) via le même système répondeur. La pose est conservée au relâchement.
+- **Visuel 3D en vitrine de musée (`visuel-carte.tsx`, 300 px)** : la carte (faces `front.png` / `back.png` sur un plan à perspective) est posée sur un **pupitre** (dalle, fût, socle) dans une vitrine sombre éclairée par un **spot plafonnier** (faisceau triangulaire + halo chaud) — son **ombre glisse sur la dalle** avec la rotation. Glissement **horizontal** = rotation complète (360° libres, le dos apparaît passé 90°), glissement **vertical** = inclinaison bornée ±30° qui révèle les **reflets de lumière** (bandes translucides glissant avec la rotation, intensifiées par l'inclinaison). Pointeur (web) ou doigt (natif) via le même système répondeur, posé sur toute la vitrine. La pose est conservée au relâchement.
 - Bloc stats (tolérant §6.4) : Puissance (`datas.power` ou valeur serveur), Santé, Attaque, Rareté, Saison.
 - Bloc « Capacités spéciales » si `specials` non vide : nom, attaque/santé, durée (`turn`).
 

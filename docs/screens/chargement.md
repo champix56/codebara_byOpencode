@@ -1,44 +1,45 @@
 # Chargement
 
-Fenêtre : **entrée de l'app** — fichier `src/ecrans/chargement.tsx`
+Fenêtre : **entrée de l'app** — fichier `src/ecrans/chargement.tsx` (deux modes : `auto` au démarrage, `post-connexion` après le bouton Connexion)
 
 ## Rôle
 
-Écran de démarrage de l'application. Barre visuelle de 4 s (libellés « auto-connexion » puis « recuperation de la collection », et **pendant** que la barre tourne :
+Splash piloté par les **vraies étapes** du démarrage (plus de minuteur artificiel) — après l'hydratation du store (`PersistGate` : montée seulement une fois rehydrated) :
 
-- si la tranche utilisateur persistée contient **un couple de tokens** (`apiToken` + `requestToken`) → **vrai contrôle de session** : `authentifierParTokens` → `GET /user/auth` par tokens (contrat pyCodebara2 §5.2b), sans rotation ;
-  - données fraîches reçues → `dispatch(seConnecter(...))` (données mises à jour, tokens conservés) puis `$ remplacer({ nom: 'principal' })` — reprise de session transparente ;
-  - couple refusé (session morte) → `dispatch(seDeconnecter())` + `remplacer({ nom: 'connexion' })` ;
-  - panne réseau → `remplacer({ nom: 'connexion' })` (les tokens persistent tant qu'ils n'ont pas été consommés) ;
-- sinon → `remplacer({ nom: 'connexion' })`.
-
-Les libellés/la durée restent centralisés en constantes (`TASKS`, `TASK_DURATION_MS`).
+1. **Connexion** (libellé affiché, min. 900 ms de lisibilité) :
+   - mode `auto` : libellé « **tentative de connexion auto** » — si des tokens sont persistés → `authentifierParTokens` (`GET /user/auth` §5.2b) ; données fraîches → `seConnecter` (tokens conservés) ; couple refusé → `seDeconnecter` + connexion ; panne → connexion (tokens non consommés conservés). Sans tokens → connexion directe.
+   - mode `post-connexion` (retour du bouton « Connexion » de la fenêtre connexion) : libellé « **connexion** » — la session vient d'être validée par `authentifierParLogin`, aucun appel redondant.
+2. **« récupération des cartes »** : `verifierEtRecuperer` (cf. `src/services/verification.ts`) — lecture `GET /card` (§5.4), vérification du **hash** (sha256) de chaque archive locale contre le `cardHash` du serveur, puis téléchargement des seules cartes **absentes ou détruites** (`GET /card/{id}` §5.5, validation §6.3 avant stockage + maj index du nom).
+3. Succès → `remplacer({ nom: 'principal' })` ; échec d'auto-connexion → `remplacer({ nom: 'connexion' })`.
 
 ## Structure visuelle
 
-- Fond blanc, plein écran.
-- Œuf centré verticalement/horizontalement (image `assets/icon.png`, 220 px, `contain`).
-- En **bas** de l'écran, bloc centré :
-  - un texte juste au-dessus de la barre : la tâche en cours + « … » (ex. `auto-connexion…`), gris #6b7280, 14 px ;
-  - une **barre de progression** (240 px de large, 6 px de haut, coins arrondis, piste #e5e7eb, remplissage vert #43a047) avançant linéairement sur les 4 s totales.
+- Fond blanc, œuf centré (`assets/icon.png`, 220 px).
+- En bas : libellé de l'étape + « … » (gris 14 px), compteur `n/total` pendant la récupération, **barre de progression** (240 px, piste #e5e7eb, remplissage vert #43a047) dont la fraction suit les phases (connexion 10 % → vérification 35-65 % → téléchargement 70-97 %), spinner vert.
+- **Erreur de récupération** : message rouge + bouton « Réessayer » (relance le même parcours).
+
+## Modal de destruction (carte corrompue)
+
+Pendant la vérification, une archive locale dont le **hash ≠ cardHash serveur** suspend le parcours et ouvre une modal (décision produit 2026-11-12) :
+
+- **carte par défaut** (cadre gris, ⚠, « Carte #id » — le contenu local n'est pas affiché, il n'est plus fiable) ;
+- **la raison** : « Hash de l'archive locale (…) différent du hash serveur (…) — archive corrompue ou modifiée. » ;
+- **un unique bouton « Détruire »** (rouge, aucune autre action) → suppression de l'archive locale (`supprimerCarte`, collection.ts) → le parcours reprend et la carte est re-téléchargée avec les absentes.
 
 ## États
 
-- `progress` : 0 → 1, rafraîchi toutes les 50 ms (calcul à partir de `Date.now()`, pas cumulé — résiste aux suspensions).
-- Tâche affichée : `TASKS[floor(progress × 2)]` (clampée).
-- Navigation déclenchée une seule fois (ref `navigated`) dès que `progress ≥ 1` — puis la reprise de session (cf. Rôle) s'ajoute de façon asynchrone.
-- Réhydratation : l'écran est démontré **après** le `PersistGate` — la tranche utilisateur est déjà relue.
+- `libelle` (étape affichée), `progression` { phase, faites, total }, `fraction` (barre), `ecart` (modal en attente de destruction), `erreur`.
+- Lancement automatique unique à la montée (`lancementRef`) ; « Réessayer » ré-arme et relance (les tokens relus du store sont à jour après rotation §3.3).
+- `ErreurSession` : le service a déjà purgé + navigué vers la connexion — l'écran ignore l'erreur.
+- Un écart de hash en attente tient le splash figé (promesse résolue par la destruction).
 
 ## Navigation
 
-- Entrée de l'application : **toujours la première fenêtre de la pile** (`src/navigation/navigateur.ts`) — aucune URL ne peut sélectionner autre chose.
-- Sortie : `$ remplacer({ nom: 'connexion' })` **ou `{ nom: 'principal' }`** à la fin des tâches (cf. Rôle) → l'écran est **retiré de la pile** (retour arrière impossible vers lui).
+- Entrée de l'application : **toujours la première fenêtre de la pile** — aucune URL ne peut sélectionner autre chose.
+- La fenêtre connexion relance ce splash via `remplacer({ nom: 'chargement', mode: 'post-connexion' })` (cf. connexion.md).
+- Sortie : `remplacer({ nom: 'connexion' })` ou `{ nom: 'principal' }` — l'écran est retiré de la pile (pas de retour arrière vers lui).
 
 ## Notes
 
-- L'interval est nettoyé à l'unmount (pas de fuite, pas de navigation en double).
-- L'image chargée est la même source que l'icône de l'app (`assets/icon.png`, l'œuf).
-- **Web (2026-11-11)** — l'écran est TOUJOURS le premier affiché : tout deep link
-  tapé dans la barre d'adresse (…/maison…) est ramené à « / » au chargement du
-  bundle (`verrouillerUrlRacine`, `src/utils/figerUrl.ts`), et l'URL du navigateur
-  reste à la racine pendant toute l'app (règle : `docs/architecture.md` § Web).
+- Vérification validée navigateur headless (CDP, 2026-11-12) : libellés des deux étapes, modal (carte par défaut + raison + unique bouton), destruction → re-téléchargement, grille maison complète ensuite.
+- **Web (2026-11-11)** — l'écran est TOUJOURS le premier affiché : toute adresse tapée est ramenée à « / » au chargement du bundle (`verrouillerUrlRacine`, `src/utils/figerUrl.ts`).

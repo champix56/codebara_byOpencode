@@ -8,6 +8,7 @@ import { enregistrerCarte, lireCarteLocale, majIndex } from '../services/collect
 import { useAppSelector } from '../store/hooks';
 import { cdzDepuisBase64, ouvrirCdz, type Cdz } from '../utils/cdz';
 import { encoderBase64 } from '../utils/base64';
+import VisuelCarte from './visuel-carte';
 
 // Fenêtre détail d'une carte (ouvert depuis la liste de la maison) :
 // l'archive .cdz vient du cache local <idUser>/<carteId>.cdz (§6.6) — ou, à
@@ -84,13 +85,6 @@ export default function CarteDetail({ carteId }: { carteId: number }) {
     (async () => charger())();
   }, [charger]);
 
-  const imageFront = useMemo(
-    () =>
-      etat.phase === 'pret'
-        ? { uri: `data:image/png;base64,${encoderBase64(etat.cdz.front)}` }
-        : null,
-    [etat],
-  );
   const imagePerso = useMemo(
     () =>
       etat.phase === 'pret'
@@ -134,13 +128,9 @@ export default function CarteDetail({ carteId }: { carteId: number }) {
         </View>
       </View>
 
-      {imageFront && (
-        <Image
-          source={imageFront}
-          style={[styles.front, { aspectRatio: 600 / 1037 }]}
-          resizeMode="contain"
-        />
-      )}
+      {/* Visuel 3D : faces front/back de l'archive, rotation par glissement
+          (360° horizontal, ±30° vertical pour les reflets de lumière). */}
+      <VisuelCarte cdz={cdz} largeur={300} />
 
       <View style={styles.stats}>
         <Text style={styles.statLigne}>
@@ -235,13 +225,6 @@ const styles = StyleSheet.create({
   numero: {
     fontSize: 13,
     color: '#9ca3af',
-  },
-  front: {
-    width: '100%',
-    maxWidth: 340,
-    borderRadius: 12,
-    marginTop: 16,
-    backgroundColor: '#fafafa',
   },
   stats: {
     marginTop: 18,

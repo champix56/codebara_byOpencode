@@ -75,6 +75,18 @@ export async function lireCarteLocale(
   return fichier.exists ? fichier.bytes() : null;
 }
 
+// Détruit l'archive locale d'une carte — parcours de la vérification au retour
+// de connexion : hash local ≠ cardHash serveur → destruction (décision
+// produit 2026-11-12), la carte sera re-téléchargée juste après (§5.5).
+export async function supprimerCarte(idUser: number, carteId: number): Promise<void> {
+  if (Platform.OS === 'web') {
+    await supprimerCarteWeb(idUser, carteId);
+    return;
+  }
+  const fichier = new File(Paths.document, String(idUser), `${carteId}.cdz`);
+  if (fichier.exists) await fichier.delete();
+}
+
 // ─── Natif (expo-file-system API nouvelle) ──────────────────────────────────
 
 function fichierIndexNatif(idUser: number): File {
@@ -162,4 +174,14 @@ async function lireCarteWeb(idUser: number, carteId: number): Promise<Uint8Array
   } catch {
     return null;
   }
+}
+
+async function supprimerCarteWeb(idUser: number, carteId: number): Promise<void> {
+  const base = await ouvrirBase();
+  await new Promise((filtre, remettre) => {
+    const transaction = base.transaction('cartes', 'readwrite');
+    transaction.objectStore('cartes').delete(cleCarte(idUser, carteId));
+    transaction.oncomplete = () => filtre(null);
+    transaction.onerror = () => remettre(new Error('IndexedDB suppression impossible'));
+  });
 }

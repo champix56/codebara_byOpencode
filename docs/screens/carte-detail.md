@@ -10,7 +10,7 @@ Fenêtre : `carte` — `App.tsx` monte `src/components/carte-detail.tsx` avec l'
 
 - Barre d'en-tête maison : titre « Carte » + bouton retour.
 - En-tête : avatar `perso.png` (≤256×256, arrondi) + nom (`datas.name`, « Carte #id » si vide) + `#id`.
-- **`front.png` en grand** (600×1037, `aspectRatio`, data URI base64) — le serveur dessine déjà nom, stats, barres et specials sur l'image (§6.2, rendu recommandé v1).
+- **Visuel 3D (`visuel-carte.tsx`, 300 px)** : faces `front.png` / `back.png` sur un plan à perspective — glissement **horizontal** = rotation complète (360° libres, le dos apparaît passé 90°), glissement **vertical** = inclinaison bornée ±30° qui révèle les **reflets de lumière** (bandes translucides glissant avec la rotation, intensifiées par l'inclinaison). Pointeur (web) ou doigt (natif) via le même système répondeur. La pose est conservée au relâchement.
 - Bloc stats (tolérant §6.4) : Puissance (`datas.power` ou valeur serveur), Santé, Attaque, Rareté, Saison.
 - Bloc « Capacités spéciales » si `specials` non vide : nom, attaque/santé, durée (`turn`).
 
@@ -25,11 +25,11 @@ Fenêtre : `carte` — `App.tsx` monte `src/components/carte-detail.tsx` avec l'
 
 ## Navigation
 
-- Entrée : tap une ligne de la liste maison (`naviguer({ nom: 'carte', carteId })`).
+- Entrée : tap une **cellule d'aperçu** de la grille maison (`naviguer({ nom: 'carte', carteId })`).
 - Sortie : bouton retour de la barre d'en-tête → `retourner()` (dépile vers la maison).
 
 ## Notes
 
-- Le fichier `back.png` extrait mais non affiché (mise en réserve) ; `deck.json` non consommé (rendu libre à venir).
+- Le fichier `back.png` est affiché comme **face arrière du visuel 3D** (visible en tournant la carte) ; `deck.json` non consommé (rendu libre à venir).
 - Attention contrat §12.5 : `GET /card/{id}` ne vérifie PAS l'appartenance — appels uniquement depuis la collection du joueur.
 - Sur web : archive dans IndexedDB (`codebara-cdz`) plutôt que sur disque (expo-file-system natif-only).

@@ -22,7 +22,7 @@ Fenêtre **triple** : connexion, création de compte et **renouvellement du mot 
 ## États
 
 - `mode` `'login' | 'signup' | 'oublie'`, `identifiant` (partagé entre les modes), `motDePasse`, `message`, `enCours`.
-- **Mode connexion** → `authentifierParLogin(mail, mdp)` (`src/services/api.ts`) : `GET /user/auth` avec header `datas: {mail, password}` — `password = SHA256(UTF-8(mail exact + mdp clair))` hex minuscule (contrat §3.2, `src/utils/hash.ts`). Succès : **données serveur + les deux tokens ré-émis** → `dispatch(seConnecter(...))` — `idUser` (`id`), `nickname`, `mail`, `amount`, `hash` (champ interne serveur, conservé), `apiToken`, `requestToken` — puis `remplacer({ nom: 'principal' })` (src/navigation/navigateur.ts). Tranche **persistée** → reprise de session au prochain lancement.
+- **Mode connexion** → `authentifierParLogin(mail, mdp)` (`src/services/api.ts`) : `GET /user/auth` avec header `datas: {mail, password}` — `password = SHA256(UTF-8(mail exact + mdp clair))` hex minuscule (contrat §3.2, `src/utils/hash.ts`). Succès : **données serveur + les deux tokens ré-émis** → `dispatch(seConnecter(...))` — `idUser` (`id`), `nickname`, `mail`, `amount`, `hash` (champ interne serveur, conservé), `apiToken`, `requestToken` — puis **le splash est remis** : `remplacer({ nom: 'chargement', mode: 'post-connexion' })` (décision produit 2026-11-12) — le splash enchaîne « connexion » puis « récupération des cartes » (vérification du cache local + téléchargement des manquantes, cf. chargement.md / verification.ts) avant d'ouvrir le principal. Tranche **persistée** → reprise de session au prochain lancement.
 - **Mode création** → `creerCompte(mail)` : `POST /user {"mail": …}` sans header `datas` (§5.1). Succès : message « Compte créé… » — le serveur génère le mot de passe et l'envoie par e-mail (dépend de sa config ; en `DEBUG=True` rien n'est envoyé, §12.1) — retour au mode connexion. Refus métier = **403 `Forbidden`** (mail mal formé OU compte déjà existant, cas volontairement confondus — contrat §4/dis 2026-10-30) → « Création refusée : vérifie cette adresse… ».
 - **Mode oublié** → `renouvelerMotDePasse(mail)` : `POST /user/renew-password {"mail"}` (§5.9, sans tokens). Succès `{"renewed": true}` **sans token** — aucune rotation. Échec = **403 `Forbidden`** ambigu (mail mal formé OU compte inconnu — **pas d'oracle d'existence de compte**) → l'écran affiche le même message ambigu que le succès : « Si ce compte existe, un courriel avec le nouveau mot de passe vient de partir. » Le serveur écrit le nouveau mot de passe (SHA2(mail+clair)) et l'envoie par e-mail ; avec le serveur en `DEBUG=True`, l'e-mail n'est pas envoyé (mot de passe imprimé dans le log du serveur). Retour au mode connexion après soumission.
 - Erreur « Invalid REQUEST TOKEN » impossible sur ces routes (§5.2/§5.9) — pas de gestion implicite ici.
@@ -32,8 +32,8 @@ Fenêtre **triple** : connexion, création de compte et **renouvellement du mot 
 
 - Arrivée : après `remplacer({ nom: 'connexion' })` déclenché par l'écran de chargement — le splash n'est plus dans la pile, retour arrière impossible vers lui.
 - Le lien bascule le mode en place (aucun changement de fenêtre) ; le mail saisi est conservé.
-- Connexion réussie : `remplacer({ nom: 'principal' })` — sortie de pile.
-- Bouton debug : `remplacer({ nom: 'principal' })` — même sortie de pile.
+- Connexion réussie : `remplacer({ nom: 'chargement', mode: 'post-connexion' })` — sortie de pile (le splash relancé mène ensuite au principal).
+- Bouton debug : `remplacer({ nom: 'principal' })` — sortie de pile directe (sans session serveur : pas de vérification de cartes).
 - Aucune barre d'en-tête sur cette fenêtre (plein écran).
 
 ## Notes

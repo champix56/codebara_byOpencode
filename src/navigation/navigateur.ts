@@ -17,7 +17,10 @@
 // courante. Aucune écriture d'historique navigateur : l'URL reste la racine.
 
 export type Fenetre =
-  | { nom: 'chargement' }
+  // mode 'auto' : connexion automatique par tokens (splash au démarrage) ;
+  // mode 'post-connexion' : splash relancé par le bouton Connexion — étapes
+  // « connexion » puis « récupération des cartes ».
+  | { nom: 'chargement'; mode?: 'post-connexion' }
   | { nom: 'connexion' }
   | { nom: 'principal' }
   | { nom: 'usine' }

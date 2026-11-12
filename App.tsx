@@ -43,7 +43,7 @@ function FenetreAvecEntete({ titre, children }: { titre: string; children: React
 function rendreFenetre(fenetre: Fenetre): ReactNode {
   switch (fenetre.nom) {
     case 'chargement':
-      return <Chargement />;
+      return <Chargement mode={'mode' in fenetre ? fenetre.mode : undefined} />;
     case 'connexion':
       return <Connexion />;
     case 'principal':

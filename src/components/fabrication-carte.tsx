@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Modal,
   Pressable,
   StyleSheet,
@@ -17,7 +16,7 @@ import {
 } from '../services/api';
 import { enregistrerCarte, majIndex } from '../services/collection';
 import { cdzDepuisBase64, ouvrirCdz, type Cdz } from '../utils/cdz';
-import { encoderBase64 } from '../utils/base64';
+import VisuelCarte from './visuel-carte';
 
 // Popup de fabrication d'une carte, partagée par les fenêtres usine (natif et
 // web) — recette complète du contrat §6.1 :
@@ -27,8 +26,9 @@ import { encoderBase64 } from '../utils/base64';
 //     sha256(bytes) == checksum, extraction (signature ZIP + hashs.json) →
 //     en cas de corruption interne : re-téléchargement unique GET /card/{id} ;
 //  3) stockage immédiat de la v1 : <idUser>/<cardid>.cdz (§6.1) ;
-//  4) popup « éclosion » : front.png affiché tel quel (600×1037) + champ de
-//     nom OBLIGATOIRE (décision produit 2026-11-03) ;
+//  4) popup « éclosion » : visuel 3D (front.png / back.png tournables,
+//     visuel-carte.tsx) + champ de nom OBLIGATOIRE (décision produit
+//     2026-11-03) ;
 //  5) PUT /card/name {cid, name} (§5.7) → nouvelle archive → validation
 //     interne (ZIP uniquement — le tar.xz du bug §5.7 est refusé, la v1 reste
 //     en cache) → remplacement de la v1 par la v2 + maj de l'index du nom.
@@ -45,8 +45,6 @@ type Props = {
   // affiche son toast de succès et ferme la popup.
   surEnregistree?: (carteId: number, nom: string) => void;
 };
-
-const RAPPORT_CARTE = 600 / 1037;
 
 export default function FabricationCarte({ chiffres, surFermer, surEnregistree }: Props) {
   const idUser = useAppSelector((etat) => etat.utilisateur.idUser);
@@ -109,14 +107,6 @@ export default function FabricationCarte({ chiffres, surFermer, surEnregistree }
     })();
   }, [chiffres, sessionActive, idUser]);
 
-  const imageFront = useMemo(
-    () =>
-      etape.phase === 'eclosion'
-        ? { uri: `data:image/png;base64,${encoderBase64(etape.cdz.front)}` }
-        : null,
-    [etape],
-  );
-
   const nomValide = nom.trim().length > 0;
 
   // Étape 5 : renommage §5.7 — le nom est OBLIGATOIRE (décision produit) ;
@@ -165,13 +155,8 @@ export default function FabricationCarte({ chiffres, surFermer, surEnregistree }
           {etape.phase === 'eclosion' && (
             <View style={styles.centre}>
               <Text style={styles.titre}>Éclosion — carte #{etape.carteId}</Text>
-              {imageFront && (
-                <Image
-                  source={imageFront}
-                  style={[styles.front, { aspectRatio: RAPPORT_CARTE }]}
-                  resizeMode="contain"
-                />
-              )}
+              {/* Visuel 3D : front/back tournables (glisser = tourner). */}
+              <VisuelCarte cdz={etape.cdz} largeur={220} />
               <Text style={styles.label}>Nom de la carte</Text>
               <TextInput
                 style={styles.champ}

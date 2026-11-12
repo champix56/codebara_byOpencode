@@ -1,78 +1,174 @@
-import { useEffect, useRef, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { remplacer } from '../navigation/navigateur';
-import { authentifierParTokens } from '../services/api';
-import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { authentifierParTokens, ErreurSession } from '../services/api';
+import { supprimerCarte } from '../services/collection';
+import {
+  verifierEtRecuperer,
+  type PhaseVerification,
+} from '../services/verification';
+import { useAppDispatch } from '../store/hooks';
+import { store } from '../store/store';
 import { seConnecter, seDeconnecter } from '../store/utilisateur';
 
 // Fenêtre de chargement — l'ENTRÉE de l'application : toujours la première
-// fenêtre de la pile (aucune URL ne peut sélectionner autre chose). Tâches
-// affichées pendant le chargement (barre visuelle) ; la première est réelle :
-// reprise de session par tokens (contrat §5.2b).
-const TASKS = ['auto-connexion', 'recuperation de la collection'] as const;
-const TASK_DURATION_MS = 2000;
-const TICK_MS = 50;
-const TOTAL_MS = TASKS.length * TASK_DURATION_MS;
+// fenêtre de la pile (aucune URL ne peut sélectionner autre chose). Après
+// l'hydratation du store (PersistGate : montée seulement une fois rehydrated),
+// deux modes :
+//
+//  - 'auto' (démarrage) : tentative de connexion automatique par tokens
+//    persistés — libellé « tentative de connexion auto » dans le splash ;
+//    échec ou refus → fenêtre connexion.
+//  - 'post-connexion' (bouton Connexion de la fenêtre connexion) : le splash
+//    est remis, étape « connexion » (déjà validée) puis « récupération des
+//    cartes ».
+//
+// Après la connexion : vérification de la collection (§5.4 + cache local,
+// cf. services/verification.ts) sous le libellé « récupération des cartes » —
+// les cartes dont le hash local diffère du serveur ouvrent une MODAL
+// (carte par défaut + raison + unique bouton Détruire) ; la destruction
+// supprime l'archive locale et la carte est re-téléchargée avec les absentes.
+// Succès complet → fenêtre principale.
+type Mode = 'auto' | 'post-connexion';
 
-export default function Chargement() {
-  const [progress, setProgress] = useState(0);
-  const navigated = useRef(false);
+type Props = { mode?: Mode };
+
+// Écart de hash en attente de décision : carte + raison + action unique.
+type Ecart = { carteId: number; raison: string; surDetruire: () => void };
+
+// Temps minimal d'affichage d'un libellé (lisibilité des étapes du splash).
+const PAUSE_ETAPE_MS = 900;
+
+export default function Chargement({ mode = 'auto' }: Props) {
   const dispatcher = useAppDispatch();
-  const utilisateurCourant = useAppSelector((etat) => etat.utilisateur);
+  const [libelle, definirLibelle] = useState(
+    mode === 'post-connexion' ? 'connexion' : 'tentative de connexion auto',
+  );
+  const [progression, definirProgression] = useState<{
+    phase: PhaseVerification;
+    faites: number;
+    total: number;
+  } | null>(null);
+  const [fraction, definirFraction] = useState(0.1);
+  const [ecart, definirEcart] = useState<Ecart | null>(null);
+  const [erreur, definirErreur] = useState<string | null>(null);
+
+  // Un seul lancement automatique ; « Réessayer » relance le même parcours.
+  const lancementRef = useRef(false);
+
+  const lancer = useCallback(async () => {
+    definirErreur(null);
+    definirProgression(null);
+    definirFraction(0.1);
+
+    // ── Étape 1 : connexion ────────────────────────────────────────────────
+    definirLibelle(mode === 'post-connexion' ? 'connexion' : 'tentative de connexion auto');
+    definirFraction(0.1);
+    const debutEtape = Date.now();
+    const utilisateur = store.getState().utilisateur;
+
+    if (mode === 'auto') {
+      if (!utilisateur.apiToken || !utilisateur.requestToken) {
+        // Aucune session persistée : direction la connexion.
+        remplacer({ nom: 'connexion' });
+        return;
+      }
+      try {
+        const donnees = await authentifierParTokens(
+          utilisateur.apiToken,
+          utilisateur.requestToken,
+        );
+        if (!donnees) {
+          // Couple refusé (session morte) : purge des tokens périmés.
+          dispatcher(seDeconnecter());
+          remplacer({ nom: 'connexion' });
+          return;
+        }
+        // Données fraîches + tokens conservés (aucune rotation sur cette route).
+        dispatcher(
+          seConnecter({
+            idUser: donnees.id,
+            nickname: donnees.nickname,
+            mail: donnees.mail,
+            amount: donnees.amount,
+            hash: donnees.hash,
+            apiToken: utilisateur.apiToken,
+            requestToken: utilisateur.requestToken,
+          }),
+        );
+      } catch {
+        // Panne réseau : direction la connexion en attendant le serveur.
+        remplacer({ nom: 'connexion' });
+        return;
+      }
+    } else if (!utilisateur.apiToken || !utilisateur.requestToken) {
+      // Garde-fou : le mode post-connexion suppose une session toute fraîche.
+      remplacer({ nom: 'connexion' });
+      return;
+    }
+
+    const idUser = store.getState().utilisateur.idUser;
+    if (idUser === null) {
+      remplacer({ nom: 'connexion' });
+      return;
+    }
+    // Lisibilité de l'étape de connexion avant la suite.
+    const reste = PAUSE_ETAPE_MS - (Date.now() - debutEtape);
+    if (reste > 0) await new Promise((r) => setTimeout(r, reste));
+
+    // ── Étape 2 : récupération des cartes ─────────────────────────────────
+    definirLibelle('récupération des cartes');
+    const deplacement = (phase: PhaseVerification, faites: number, total: number) => {
+      definirProgression({ phase, faites, total });
+      const part = total > 0 ? faites / total : 1;
+      definirFraction(phase === 'verification' ? 0.35 + part * 0.3 : 0.7 + part * 0.27);
+    };
+    try {
+      await verifierEtRecuperer(idUser, {
+        // Parcours suspendu jusqu'à la destruction confirmée dans la modal.
+        surEcartHash: (carteId, raison) =>
+          new Promise<void>((resoudre) => {
+            definirEcart({
+              carteId,
+              raison,
+              surDetruire: async () => {
+                definirEcart(null);
+                try {
+                  await supprimerCarte(idUser, carteId);
+                } finally {
+                  resoudre();
+                }
+              },
+            });
+          }),
+        surProgression: deplacement,
+      });
+    } catch (l_erreur) {
+      if (l_erreur instanceof ErreurSession) {
+        // Session morte pendant la vérification : le service a déjà réinitialisé
+        // le store et déclenché la connexion — rien à afficher.
+        return;
+      }
+      definirErreur((l_erreur as Error).message);
+      return;
+    }
+    definirFraction(1);
+    remplacer({ nom: 'principal' });
+  }, [dispatcher, mode]);
 
   useEffect(() => {
-    const startedAt = Date.now();    const interval = setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      setProgress(Math.min(1, elapsed / TOTAL_MS));
-      if (elapsed >= TOTAL_MS && !navigated.current) {
-        navigated.current = true;
-        clearInterval(interval);
-
-        // Reprise de session : si des tokens serveur sont persistés, on tente
-        // la validation (GET /user/auth par tokens) avant d'ouvrir l'app ;
-        // sinon, ou session refusée, remplacement par la connexion.
-        const { apiToken, requestToken } = utilisateurCourant;
-        if (apiToken && requestToken) {
-          authentifierParTokens(apiToken, requestToken)
-            .then((donnees) => {
-              if (donnees) {
-                // Données fraîches + tokens conservés (aucune rotation ici).
-                dispatcher(
-                  seConnecter({
-                    idUser: donnees.id,
-                    nickname: donnees.nickname,
-                    mail: donnees.mail,
-                    amount: donnees.amount,
-                    hash: donnees.hash,
-                    apiToken,
-                    requestToken,
-                  }),
-                );
-                remplacer({ nom: 'principal' });
-              } else {
-                // Couple refusé (session morte) : purge des tokens périmés
-                // puis connexion.
-                dispatcher(seDeconnecter());
-                remplacer({ nom: 'connexion' });
-              }
-            })
-            .catch(() => {
-              // Panne réseau : direction la connexion en attendant le serveur.
-              remplacer({ nom: 'connexion' });
-            });
-        } else {
-          remplacer({ nom: 'connexion' });
-        }
-      }
-    }, TICK_MS);
-    return () => clearInterval(interval);
-    // Dépendances volontairement réduites : l'écran est monté une fois à froid,
-    // après réhydratation de la persistance (PersistGate).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const percent = Math.round(progress * 100);
-  const task = TASKS[Math.min(TASKS.length - 1, Math.floor(progress * TASKS.length))];
+    if (lancementRef.current) return;
+    lancementRef.current = true;
+    (async () => lancer())();
+  }, [lancer]);
 
   return (
     <View style={styles.container}>
@@ -85,11 +181,62 @@ export default function Chargement() {
       </View>
 
       <View style={styles.loader}>
-        <Text style={styles.taskLabel}>{task}…</Text>
+        <Text style={styles.taskLabel}>{libelle}…</Text>
+        {progression && (
+          <Text style={styles.progression}>
+            {progression.faites}/{progression.total}
+          </Text>
+        )}
         <View style={styles.track}>
-          <View style={[styles.fill, { width: `${percent}%` }]} />
+          <View style={[styles.fill, { width: `${Math.min(98, Math.round(fraction * 100))}%` }]} />
         </View>
+        {erreur ? (
+          <View style={styles.blocErreur}>
+            <Text style={styles.erreur}>{erreur}</Text>
+            <Pressable
+              style={({ pressed }) => [styles.bouton, pressed && styles.boutonAppuye]}
+              onPress={() => {
+                lancementRef.current = false;
+                (async () => lancer())();
+              }}
+            >
+              <Text style={styles.boutonTexte}>Réessayer</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <ActivityIndicator
+            style={styles.tourneur}
+            color="#43a047"
+          />
+        )}
       </View>
+
+      {/* Modal d'écart de hash — carte par défaut + raison + UNIQUE bouton
+          destruction (décision produit 2026-11-12) : l'archive locale est
+          corrompue/modifiée, rien d'autre n'est possible. */}
+      <Modal visible={ecart !== null} animationType="fade" transparent>
+        <View style={styles.voile}>
+          <View style={styles.cadre}>
+            <View style={styles.carteDefaut}>
+              <Text style={styles.carteDefautSymbole}>⚠</Text>
+              <Text style={styles.carteDefautId}>
+                {ecart ? `Carte #${ecart.carteId}` : ''}
+              </Text>
+            </View>
+            <Text style={styles.cadreTitre}>Carte corrompue</Text>
+            <Text style={styles.cadreRaison}>{ecart?.raison}</Text>
+            <Pressable
+              style={({ pressed }) => [
+                styles.boutonDetruire,
+                pressed && styles.boutonDetruireAppuye,
+              ]}
+              onPress={() => ecart?.surDetruire()}
+            >
+              <Text style={styles.boutonTexte}>Détruire</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -115,7 +262,13 @@ const styles = StyleSheet.create({
   taskLabel: {
     fontSize: 14,
     color: '#6b7280',
-    marginBottom: 12,
+    marginBottom: 6,
+  },
+  progression: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#9ca3af',
+    marginBottom: 8,
   },
   track: {
     width: 240,
@@ -128,5 +281,93 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 3,
     backgroundColor: '#43a047',
+  },
+  tourneur: {
+    marginTop: 14,
+  },
+  blocErreur: {
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+  },
+  erreur: {
+    fontSize: 13,
+    color: '#c62828',
+    textAlign: 'center',
+    paddingHorizontal: 32,
+  },
+  bouton: {
+    height: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#43a047',
+    paddingHorizontal: 28,
+  },
+  boutonAppuye: {
+    backgroundColor: '#3b8b40',
+  },
+  boutonTexte: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  voile: {
+    flex: 1,
+    backgroundColor: 'rgba(17, 24, 39, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  cadre: {
+    width: '100%',
+    maxWidth: 320,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    padding: 20,
+    alignItems: 'center',
+    gap: 10,
+  },
+  carteDefaut: {
+    width: 120,
+    height: 120 * 1037 / 600,
+    borderRadius: 10,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  carteDefautSymbole: {
+    fontSize: 28,
+    color: '#c62828',
+  },
+  carteDefautId: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  cadreTitre: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  cadreRaison: {
+    fontSize: 13,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+  boutonDetruire: {
+    height: 46,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#c62828',
+    alignSelf: 'stretch',
+    marginTop: 6,
+  },
+  boutonDetruireAppuye: {
+    backgroundColor: '#a51f1f',
   },
 });

@@ -66,8 +66,10 @@ export default function Connexion() {
             requestToken: donnees.requestToken,
           }),
         );
-        // Remplacement : pas de retour arrière vers la connexion.
-        remplacer({ nom: 'principal' });
+        // Remplacement : pas de retour arrière vers la connexion. Le splash
+        // est remis avec les étapes « connexion » puis « récupération des
+        // cartes » (vérification du cache + téléchargement des manquantes).
+        remplacer({ nom: 'chargement', mode: 'post-connexion' });
       } else if (mode === 'signup') {
         await creerCompte(mailExact);
         // Succès : le serveur a créé le compte ; le mot de passe arrive par

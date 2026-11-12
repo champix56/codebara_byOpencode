@@ -16,13 +16,6 @@ import { authentifierParLogin, creerCompte, renouvelerMotDePasse, ErreurApi } fr
 import { useAppDispatch } from '../store/hooks';
 import { UTILISATEUR_DEBUG, seConnecter } from '../store/utilisateur';
 
-// Bouton de debug : visible uniquement si la variable d'environnement DEBUG vaut « true »
-// (shell : `DEBUG=true npx expo start`, ou `DEBUG=true` dans .env). La config dynamique
-// (app.config.ts) fait l'aiguillage : valeur inlinée via EXPO_PUBLIC_DEBUG côté bundle,
-// plus redondance via Constants.expoConfig.extra.debug (réliable en natif).
-const MODE_DEBUG =
-  process.env.EXPO_PUBLIC_DEBUG === 'true' || Constants.expoConfig?.extra?.debug === true;
-
 type Mode = 'login' | 'signup' | 'oublie';
 
 // La même fenêtre sert à la connexion, à la création de compte ET au
@@ -30,6 +23,12 @@ type Mode = 'login' | 'signup' | 'oublie';
 // les liens en bas basculent entre les trois. Le mail saisi est conservé
 // d'un mode à l'autre.
 export default function Connexion() {
+  // Bouton de debug : visible uniquement si la variable d'environnement DEBUG vaut « true »
+// (shell : `DEBUG=true npx expo start`, ou `DEBUG=true` dans .env). La config dynamique
+// (app.config.ts) fait l'aiguillage : valeur inlinée via EXPO_PUBLIC_DEBUG côté bundle,
+// plus redondance via Constants.expoConfig.extra.debug (réliable en natif).
+const MODE_DEBUG =
+  process.env.EXPO_PUBLIC_DEBUG === 'true' //|| Constants.expoConfig?.extra?.debug === true;
   const [mode, setMode] = useState<Mode>('login');
   const [identifiant, setIdentifiant] = useState('');
   const [motDePasse, setMotDePasse] = useState('');

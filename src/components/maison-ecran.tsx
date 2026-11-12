@@ -66,7 +66,7 @@ export default function MaisonEcran() {
   const [serie, definirSerie] = useState<FiltreSerie>('toutes');
   // Défaut : 6 par ligne sur le web (grand écran), 3 en natif (portrait).
   const [colonnes, definirColonnes] = useState(() =>
-    Platform.OS === 'web' ? COLONNES_MAX : 3,
+    Platform.OS === 'web' ? 4 : 3,
   );
 
   // Aperçus locaux, lus une fois par liste (ref : identifiants déjà tentés —

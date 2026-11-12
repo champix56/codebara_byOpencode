@@ -25,9 +25,9 @@ Run lint and typecheck before declaring any task done.
 
 ## Navigation & Routing
 
-- Use **Expo Router** for all navigation. Routes live in `src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `src/app/`.
-- Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
-- Docs: https://docs.expo.dev/router/introduction.md
+- **No router, no URLs.** The app (web included) is a plain SPA: `package.json` → `"main": "index.ts"` calls `registerRootComponent(App)` with the root component in `App.tsx`. Expo Router was removed on 2026-11-11 — do not reintroduce it, no route files, no history writes.
+- All navigation is state-based via `src/navigation/navigateur.ts` (`naviguer`, `remplacer`, `retourner`, type `Fenetre`) — root screens live in `src/ecrans/` (chargement, connexion, principal), other windows are rendered by `App.tsx` with the shared header `src/components/entete-ecran.tsx`. Keep non-screen code (components, hooks, utils) outside `src/ecrans/`.
+- On web the browser URL must always stay at the root (`src/utils/figerUrl.ts`, applied in `index.ts`); no path may ever select a specific screen — the app always starts from the chargement splash.
 
 ## Building with EAS
 
@@ -44,7 +44,7 @@ Docs: https://docs.expo.dev/eas/index.md
 
 Every screen ("fenêtre") the user asks about MUST be described in its own dedicated Markdown file — never in the conversation — to limit token usage:
 
-- Location: `docs/screens/<screen-id>.md`, one file per screen, `<screen-id>` in kebab-case matching the screen/route name.
+- Location: `docs/screens/<screen-id>.md`, one file per screen, `<screen-id>` in kebab-case matching the window name.
 - If the file already exists, read it and update it in place instead of rewriting from scratch.
 - File structure: Rôle, Structure visuelle, États, Navigation, + notes when needed (keep it concise, write in French).
 - Add the new file to the index table in `docs/screens/README.md`.

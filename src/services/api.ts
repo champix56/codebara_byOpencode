@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { remplacer } from '../navigation/navigateur';
 import { persistor, store } from '../store/store';
 import { renouvelerRequestToken, seDeconnecter } from '../store/utilisateur';
 import { hacherMotDePasse } from '../utils/hash';
@@ -122,11 +122,11 @@ function lireUtilisateur(source: Record<string, unknown>): DonneesUtilisateurSer
 // Mort de session (couple de tokens consommé) ou sortie volontaire (mot de
 // passe changé, §5.10 : l'app déconnecte l'utilisateur après un 200) :
 // remise à zéro de la tranche persistée + retour à la connexion, centralisés
-// ici — l'écran reçoit ensuite son erreur ou se redessine sur /login.
+// ici — l'écran reçoit ensuite son erreur ou se redessine sur la connexion.
 export function quitterSession(): void {
   store.dispatch(seDeconnecter());
   persistor.purge();
-  router.replace('/login');
+  remplacer({ nom: 'connexion' });
 }
 
 // ─── Route protégée générique (header `datas` + rotation) ───────────────────

@@ -185,3 +185,39 @@ export async function ouvrirCdz(octets: Uint8Array, checksumAttendu?: string): P
 export function cdzDepuisBase64(base64: string): Uint8Array {
   return decoderBase64(base64);
 }
+
+// ─── Aperçu léger (grille de la maison) ─────────────────────────────────────
+
+// Un aperçu de carte : image front + données métier, extraits SANS les
+// contrôles d'intégrité §6.3 (sha256 archive + hashs.json) — réservés à la
+// fenêtre détail : l'affichage de la liste ne doit pas payer ce coût pour
+// chaque carte de la collection.
+export type ApercuCarte = { front: Uint8Array; datas: DonneesCarte };
+
+export async function extraireApercu(octets: Uint8Array): Promise<ApercuCarte> {
+  if (!estZipValide(octets)) {
+    throw new ErreurCdz('Archive .cdz invalide : ZIP attendu');
+  }
+  let zip: JSZip;
+  try {
+    zip = await JSZip.loadAsync(octets);
+  } catch {
+    throw new ErreurCdz('Archive .cdz illisible (ZIP non décompressable)');
+  }
+  const entreeFront = zip.file('front.png');
+  const entreeDatas = zip.file('datas.json');
+  if (!entreeFront || !entreeDatas) {
+    throw new ErreurCdz('Archive .cdz incomplète (front.png/datas.json attendus)');
+  }
+  const [front, texteDatas] = await Promise.all([
+    entreeFront.async('uint8array'),
+    entreeDatas.async('string'),
+  ]);
+  let donnees: DonneesCarte;
+  try {
+    donnees = lireDatas(JSON.parse(texteDatas));
+  } catch {
+    throw new ErreurCdz('datas.json illisible dans l\'archive .cdz');
+  }
+  return { front, datas: donnees };
+}

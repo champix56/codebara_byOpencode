@@ -1,16 +1,16 @@
 # Chargement
 
-Route : `/` — fichier `src/app/index.tsx`
+Fenêtre : **entrée de l'app** — fichier `src/ecrans/chargement.tsx`
 
 ## Rôle
 
 Écran de démarrage de l'application. Barre visuelle de 4 s (libellés « auto-connexion » puis « recuperation de la collection », et **pendant** que la barre tourne :
 
 - si la tranche utilisateur persistée contient **un couple de tokens** (`apiToken` + `requestToken`) → **vrai contrôle de session** : `authentifierParTokens` → `GET /user/auth` par tokens (contrat pyCodebara2 §5.2b), sans rotation ;
-  - données fraîches reçues → `dispatch(seConnecter(...))` (données mises à jour, tokens conservés) puis `$ router.replace('/principal')` — reprise de session transparente ;
-  - couple refusé (session morte) → `dispatch(seDeconnecter())` + `router.replace('/login')` ;
-  - panne réseau → `router.replace('/login')` (les tokens persistent tant qu'ils n'ont pas été consommés) ;
-- sinon → `router.replace('/login')`.
+  - données fraîches reçues → `dispatch(seConnecter(...))` (données mises à jour, tokens conservés) puis `$ remplacer({ nom: 'principal' })` — reprise de session transparente ;
+  - couple refusé (session morte) → `dispatch(seDeconnecter())` + `remplacer({ nom: 'connexion' })` ;
+  - panne réseau → `remplacer({ nom: 'connexion' })` (les tokens persistent tant qu'ils n'ont pas été consommés) ;
+- sinon → `remplacer({ nom: 'connexion' })`.
 
 Les libellés/la durée restent centralisés en constantes (`TASKS`, `TASK_DURATION_MS`).
 
@@ -31,14 +31,14 @@ Les libellés/la durée restent centralisés en constantes (`TASKS`, `TASK_DURAT
 
 ## Navigation
 
-- Point d'entrée de l'app (première route du Stack racine).
-- Sortie : `$ router.replace('/login')` **ou `'/principal'`** à la fin des tâches (cf. Rôle) → l'écran est **retiré de la pile** (retour arrière impossible vers lui).
+- Entrée de l'application : **toujours la première fenêtre de la pile** (`src/navigation/navigateur.ts`) — aucune URL ne peut sélectionner autre chose.
+- Sortie : `$ remplacer({ nom: 'connexion' })` **ou `{ nom: 'principal' }`** à la fin des tâches (cf. Rôle) → l'écran est **retiré de la pile** (retour arrière impossible vers lui).
 
 ## Notes
 
 - L'interval est nettoyé à l'unmount (pas de fuite, pas de navigation en double).
 - L'image chargée est la même source que l'icône de l'app (`assets/icon.png`, l'œuf).
-- **Web (2026-11-03)** — l'écran est TOUJOURS le premier affiché : tout deep link
-  tapé dans la barre d'adresse (…/maison…) est ramené devant le splash par le
-  layout racine (`src/utils/figerUrl.ts` + `_layout.tsx`), et l'URL du navigateur
+- **Web (2026-11-11)** — l'écran est TOUJOURS le premier affiché : tout deep link
+  tapé dans la barre d'adresse (…/maison…) est ramené à « / » au chargement du
+  bundle (`verrouillerUrlRacine`, `src/utils/figerUrl.ts`), et l'URL du navigateur
   reste à la racine pendant toute l'app (règle : `docs/architecture.md` § Web).

@@ -92,8 +92,8 @@ export default function MairieEcran() {
   // Mot de passe : PUT /user {password: SHA256(mail_courant + clair)} (§5.10).
   // La promesse se résout UNIQUEMENT sur 200 : toute erreur (400/403, réseau,
   // session morte) lève avant. Sur 200 → déconnexion complète (§ en-tête) :
-  // reset tranche persistée + purge + router.replace('/login'), centralisés
-  // dans quitterSession.
+  // reset tranche persistée + purge + connexion, centralisés dans
+  // quitterSession.
   const enregistrerMotDePasse = async () => {
     if (!peutEnvoyerMdp) return;
     setEnEnvoiMdp(true);

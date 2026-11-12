@@ -10,8 +10,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { router, Stack } from 'expo-router';
 import Constants from 'expo-constants';
+import { remplacer } from '../navigation/navigateur';
 import { authentifierParLogin, creerCompte, renouvelerMotDePasse, ErreurApi } from '../services/api';
 import { useAppDispatch } from '../store/hooks';
 import { UTILISATEUR_DEBUG, seConnecter } from '../store/utilisateur';
@@ -29,7 +29,7 @@ type Mode = 'login' | 'signup' | 'oublie';
 // renouvellement du mot de passe (lien « Mot de passe oublié ? ») :
 // les liens en bas basculent entre les trois. Le mail saisi est conservé
 // d'un mode à l'autre.
-export default function ConnexionScreen() {
+export default function Connexion() {
   const [mode, setMode] = useState<Mode>('login');
   const [identifiant, setIdentifiant] = useState('');
   const [motDePasse, setMotDePasse] = useState('');
@@ -66,7 +66,8 @@ export default function ConnexionScreen() {
             requestToken: donnees.requestToken,
           }),
         );
-        router.replace('/principal');
+        // Remplacement : pas de retour arrière vers la connexion.
+        remplacer({ nom: 'principal' });
       } else if (mode === 'signup') {
         await creerCompte(mailExact);
         // Succès : le serveur a créé le compte ; le mot de passe arrive par
@@ -120,16 +121,14 @@ export default function ConnexionScreen() {
   // les appels protégés resteront inertes tant qu'une vraie session n'existe pas).
   const passerAuthentification = () => {
     dispatcher(seConnecter(UTILISATEUR_DEBUG));
-    router.replace('/principal');
+    remplacer({ nom: 'principal' });
   };
 
   return (
-    <>
-      <Stack.Screen options={{ headerShown: false }} />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <Image
           source={require('../../assets/icon.png')}
@@ -226,8 +225,7 @@ export default function ConnexionScreen() {
           </Pressable>
         </View>
       </ScrollView>
-      </KeyboardAvoidingView>
-    </>
+    </KeyboardAvoidingView>
   );
 }
 

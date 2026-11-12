@@ -23,19 +23,18 @@ npm run web        # + cible Web
 ## Débogage web (Chrome / VS Code)
 
 En dev web, le serveur Metro ne sert qu'**un seul bundle** —
-`localhost:8081/node_modules/expo-router/entry.bundle` (toute l'app inlinée,
-~1 000 modules) — accompagné d'**une seule sourcemap « sectionnée »** (~10 Mo,
-une section par module, validée 2026-11-03 : 1 020 sections, 36 fichiers `src/`,
-contenu embarqué). Conséquence dans l'onglet **Sources** de DevTools : il
+`localhost:8081/index.ts.bundle` (point d'entrée `index.ts`, toute l'app
+inlinée, ~370 modules) — accompagné d'**une seule sourcemap « sectionnée »**.
+Conséquence dans l'onglet **Sources** de DevTools : il
 n'existe pas de nœud `localhost:8081/src/…` — l'arbre paraît vide tant qu'on
 n'a pas déplié l'entrée du bundle, et la map est chargée de façon paresseuse
 (quelques secondes de blanc). Chrome moderne le parse sans problème (155,
 vérifié).
 
-- Le plus rapide : Sources → `Ctrl+P` → taper `index.tsx`, `maison-ecran`,
+- Le plus rapide : Sources → `Ctrl+P` → taper `chargement`, `maison-ecran`,
   `figerUrl`… → le fichier TS/TSX s'ouvre directement (les sources mappées sont
   cherchables), points d'arrêt posables.
-- Sinon : déplier `localhost:8081 → node_modules/expo-router/entry.bundle` et
+- Sinon : déplier `localhost:8081 → index.ts.bundle` et
   attendre l'affichage des fichiers.
 - Si l'arborescence reste vide : ⚙ DevTools → préférences **Sources** →
   « Enable JavaScript source maps » + cache réseau désactivé + rechargement dur.

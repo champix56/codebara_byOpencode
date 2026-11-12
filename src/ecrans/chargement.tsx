@@ -1,18 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import { router, Stack } from 'expo-router';
+import { remplacer } from '../navigation/navigateur';
 import { authentifierParTokens } from '../services/api';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { seConnecter, seDeconnecter } from '../store/utilisateur';
 
-// Tâches affichées pendant le chargement (barre visuelle) ; la première est
-// réelle : reprise de session par tokens (contrat §5.2b).
+// Fenêtre de chargement — l'ENTRÉE de l'application : toujours la première
+// fenêtre de la pile (aucune URL ne peut sélectionner autre chose). Tâches
+// affichées pendant le chargement (barre visuelle) ; la première est réelle :
+// reprise de session par tokens (contrat §5.2b).
 const TASKS = ['auto-connexion', 'recuperation de la collection'] as const;
 const TASK_DURATION_MS = 2000;
 const TICK_MS = 50;
 const TOTAL_MS = TASKS.length * TASK_DURATION_MS;
 
-export default function ChargementScreen() {
+export default function Chargement() {
   const [progress, setProgress] = useState(0);
   const navigated = useRef(false);
   const dispatcher = useAppDispatch();
@@ -28,7 +30,7 @@ export default function ChargementScreen() {
 
         // Reprise de session : si des tokens serveur sont persistés, on tente
         // la validation (GET /user/auth par tokens) avant d'ouvrir l'app ;
-        // sinon, ou session refusée, redirection vers la connexion.
+        // sinon, ou session refusée, remplacement par la connexion.
         const { apiToken, requestToken } = utilisateurCourant;
         if (apiToken && requestToken) {
           authentifierParTokens(apiToken, requestToken)
@@ -46,20 +48,20 @@ export default function ChargementScreen() {
                     requestToken,
                   }),
                 );
-                router.replace('/principal');
+                remplacer({ nom: 'principal' });
               } else {
                 // Couple refusé (session morte) : purge des tokens périmés
                 // puis connexion.
                 dispatcher(seDeconnecter());
-                router.replace('/login');
+                remplacer({ nom: 'connexion' });
               }
             })
             .catch(() => {
               // Panne réseau : direction la connexion en attendant le serveur.
-              router.replace('/login');
+              remplacer({ nom: 'connexion' });
             });
         } else {
-          router.replace('/login');
+          remplacer({ nom: 'connexion' });
         }
       }
     }, TICK_MS);
@@ -73,9 +75,7 @@ export default function ChargementScreen() {
   const task = TASKS[Math.min(TASKS.length - 1, Math.floor(progress * TASKS.length))];
 
   return (
-    <>
-      <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.logoWrap}>
         <Image
           source={require('../../assets/icon.png')}
@@ -90,8 +90,7 @@ export default function ChargementScreen() {
           <View style={[styles.fill, { width: `${percent}%` }]} />
         </View>
       </View>
-      </View>
-    </>
+    </View>
   );
 }
 

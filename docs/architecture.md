@@ -13,34 +13,32 @@
 
 ## Point d'entrée
 
-L'app utilise **Expo Router** (file-based routing) :
+L'app est une **SPA sans router et sans URL** (exigence produit 2026-11-11 : aucun
+chemin ne doit accéder à une page ou une construction particulière) — modèle
+classique Expo :
 
-- `package.json` — `main: "expo-router/entry"` : le router enregistre lui-même l'app.
-- `src/app/_layout.tsx` — layout racine : `Stack` sans en-têtes (`headerShown: false`).
-- `app.json` — configuration Expo : nom, slug, scheme `codebara`, plugins `expo-router` et `expo-camera` (permissions caméra → scanneur de codes-barres), icônes, orientation.
+- `package.json` — `main: "index.ts"` : point d'entrée (résolu par Expo CLI avec les extensions bare).
+- `index.ts` — `registerRootComponent(App)` (doc SDK 58 : registerRootComponent) + pose du verrou d'URL web (`verrouillerUrlRacine`).
+- `App.tsx` — composant racine : `SafeAreaProvider` + `Provider` (Redux) + `PersistGate`, rend la fenêtre courante de la pile `src/navigation/navigateur.ts`.
+- `app.json` — configuration Expo : nom, slug, plugins `expo-camera` (permissions caméra → scanneur de codes-barres), icônes, orientation. Plus de plugin `expo-router` ni de `scheme` (aucune URL).
 
-`App.tsx` et `index.ts` (template classique) ont été **supprimés** lors de la migration vers Expo Router.
+Expo Router a été **retiré** du projet le 2026-11-11 (dépendance, plugin, `src/app/`).
 
 ## Structure actuelle
 
 ```text
 codEbara/
+├── App.tsx               # Composant racine — fenêtre courante + SafeAreaProvider + Redux
+├── index.ts              # Point d'entrée (main package.json) — registerRootComponent(App)
 ├── src/
-│   ├── app/             # Routes (Expo Router)
-│   │   ├── _layout.tsx  # Layout racine (Stack, sans en-têtes)
-│   │   ├── index.tsx    # Écran de chargement — route /
-│   │   ├── login.tsx    # Écran connexion / création de compte — route /login
-│   │   ├── principal.tsx# Fenêtre principale — carte SVG plein écran — route /principal
-│   │   ├── usine.tsx    # Scanner + fabrication de carte — route /usine
-│   │   ├── carte/[id].tsx # Détail d'une carte — route /carte/[id]
-│   │   ├── mairie.tsx   # Informations personnelles — route /mairie
-│   │   └── maison.tsx / boutique.tsx / arene.tsx  # Collection / fenêtres vierges
-│   ├── components/      # carte-interactive, bandeau-pub, menu-lateral, fenetre-vierge, usine-ecran(.web), fabrication-carte, maison-ecran, carte-detail, mairie-ecran
+│   ├── ecrans/           # Écrans racine : chargement (entrée), connexion, principal
+│   ├── navigation/       # navigateur.ts — pile de fenêtres en mémoire (AUCUNE route)
+│   ├── components/       # carte-interactive, bandeau-pub, menu-lateral, fenetre-vierge, entete-ecran, usine-ecran(.web), fabrication-carte, maison-ecran, carte-detail, mairie-ecran
 │   ├── services/        # api.ts (client HTTP serveur) + collection.ts (cache .cdz par utilisateur)
 │   ├── store/           # Redux Toolkit — tranche utilisateur persistée (store, utilisateur, hooks)
 │   ├── utils/           # Règles métier pures (codes-bar.ts ; hash.ts SHA-256 §3.2 ; motDePasse.ts règle §5.10 ; base64.ts ; cdz.ts ZIP/.cdz §5.3-§6.3 ; figerUrl.ts — URL figée web)
 │   └── data/            # Données de l'app (carte.ts généré)
-├── scripts/             # Outils de génération (extraire-carte-svg.mjs)
+├── scripts/             # Outils + contrôles (extraire-carte-svg.mjs, verifier-figer-url.mjs)
 ├── app.config.ts        # Config dynamique — lit DEBUG → extra.debug (bouton debug)
 ├── .env                 # Variables par défaut versionnées (DEBUG, …)
 ├── app.json             # Config Expo statique (app.config.ts la complète)
@@ -56,45 +54,50 @@ Les descriptions complètes des écrans vivent dans [`screens/`](./screens/READM
 
 ## Navigation
 
-Stack racine sans en-têtes, sept routes :
+Aucune route : une **pile de fenêtres en mémoire** (`src/navigation/navigateur.ts`),
+miroir des anciens ordres router (`naviguer`≈push, `remplacer`≈replace,
+`retourner`≈back). L'entrée est TOUJOURS la fenêtre « chargement » (splash) ;
+le parcours se joue ensuite sur les boutons du jeu.
 
-| Route | Fichier | Rôle |
+| Fenêtre | Fichier | Rôle |
 | --- | --- | --- |
-| `/` | `src/app/index.tsx` | Chargement (2 tâches factices de 2 s) |
-| `/login` | `src/app/login.tsx` | Connexion / création de compte |
-| `/principal` | `src/app/principal.tsx` | Fenêtre principale — carte + hotspots + bandeau pub |
-| `/usine` | `src/app/usine.tsx` | Scanner + fabrication de carte (caméra natif / saisie web) |
-| `/carte/[id]` | `src/app/carte/[id].tsx` | Détail d'une carte (cache local ou serveur) |
-| `/maison` `/boutique` `/arene` | `src/app/{maison,boutique,arene}.tsx` | Collection / fenêtres vierges |
+| `chargement` | `src/ecrans/chargement.tsx` | Entrée de l'app (2 tâches factices de 2 s) |
+| `connexion` | `src/ecrans/connexion.tsx` | Connexion / création de compte |
+| `principal` | `src/ecrans/principal.tsx` | Fenêtre principale — carte + hotspots + bandeau pub |
+| `usine` | `App.tsx` + `components/usine-ecran(.web)` | Scanner + fabrication de carte (caméra natif / saisie web) |
+| `carte` | `App.tsx` + `components/carte-detail.tsx` | Détail d'une carte (`carteId` porté par la fenêtre — cache local ou serveur) |
+| `maison` `mairie` `boutique` `arene` | `App.tsx` + composants | Collection / infos perso / fenêtres vierges |
 
-Flux : `/` exécute ses tâches puis `router.replace('/login')` — l'écran de chargement est retiré de la pile, donc impossible d'y revenir au bouton retour. Depuis `/login`, `router.replace('/principal')` ; les zones de la carte ouvrent les fenêtres via `router.push` (retour par chevron ou geste système).
+Flux : `chargement` exécute ses tâches puis `remplacer(connexion|principal)` —
+le splash est retiré de la pile, donc impossible d'y revenir au bouton retour.
+Depuis `connexion`, `remplacer(principal)` ; les zones de la carte et le menu
+latéral ouvrent les fenêtres via `naviguer` ; le bouton retour (barre d'en-tête
+maison `EnteteEcran`, ou bouton système Android) dépile via `retourner`.
 
-## Web — URL figée à la racine (exigence produit, 2026-11-03)
+## Web — URL figée à la racine (exigence produit, 2026-11-03 / 2026-11-11)
 
-Dans le navigateur, **l'URL ne doit jamais quitter la base de l'app** : aucune route
-(`…/login`, `…/maison`, `…/carte/4…`) n'y apparaît, et la construction des fenêtres
-repart toujours du splash. Deux dispositifs (« web only », sans effet en natif) :
+Dans le navigateur, **l'URL ne doit jamais quitter la base de l'app** : aucune
+route (`…/login`, `…/maison`, `…/carte/4…`) n'y apparaît, et la construction des
+fenêtres repart toujours du splash. Depuis la fin du router, **rien n'écrit
+jamais d'entrée d'historique** — la navigation est un état React — donc
+l'adresse ne peut pas bouger d'elle-même. Le dispositif restant (« web only »,
+sans effet en natif) :
 
-- `src/utils/figerUrl.ts` — posé au **niveau module** de `src/app/_layout.tsx`
-  (donc au chargement du bundle par `expo-router/entry`, avant la première
-  écriture du router) : réécriture de `history.pushState` / `history.replaceState`
-  pour que toute écriture cible la racine `/`. L'écran affiché reste 100 % piloté
-  par le router ; seul le chemin de la barre d'adresse est figé. Le `state`
-  react-navigation est conservé (le bouton arrière du navigateur continue de
-  remonter les fenêtres, adresse inchangée). Idempotent (marqueur sur `window`),
-  silencieux hors navigateur.
-- `_layout.tsx` (effet de montage) — **lien profond tapé à la main** : l'URL
-  initiale est mémoïsée dès le chargement du bundle ; si elle n'est pas la racine,
-  l'entrée d'historique est remise à `/` et `router.replace('/')` replie le flux
-  sur le splash (auto-connexion par tokens → principal, cf. `screens/chargement.md`).
+- `src/utils/figerUrl.ts` (`verrouillerUrlRacine`), posé au chargement du bundle
+  par `index.ts`, AVANT le montage de l'app : réécriture de
+  `history.pushState` / `history.replaceState` pour que toute écriture (lib
+  tierce, code futur) cible la racine `/` ; et **lien profond tapé à la main** :
+  l'entrée d'historique est remise à `/` en une seule écriture — le flux repart
+  du splash (auto-connexion par tokens → principal, cf. `screens/chargement.md`).
+  Idempotent (marqueur sur `window`), silencieux hors navigateur.
 
-Vérifié headless Chrome + DevTools le 2026-11-03 : deep link `/maison` → URL `/` +
-connexion après splash ; navigation réelle debug → principal puis menu latéral →
-maison, URL toujours `/` ; `pushState('/principal')` / `replaceState('/carte/4')`
-réécrits vers `/` (state conservé). Contrôles hors navigateur :
+Vérifié headless Chrome + DevTools le 2026-11-03 (époque expo-router) :
+deep link `/maison` → URL `/` + connexion après splash ; navigation réelle debug
+→ principal puis menu latéral → maison, URL toujours `/` ; `pushState` /
+`replaceState` réécrits vers `/` (state conservé). Contrôles hors navigateur :
 `node --experimental-strip-types scripts/verifier-figer-url.mjs` (6 cas du
-module : capture initiale, réécriture push/replace, idempotence, remise à la
-racine, silence hors navigateur).
+module : ramène deep link, réécriture push/replace, idempotence, cas racine,
+silence hors navigateur).
 
 Note annexe — warning `useNativeDriver` (Animated) : absent sur web (module natif
 manquant) → `menu-lateral.tsx` pose `useNativeDriver: Platform.OS !== 'web'` ;
@@ -107,13 +110,13 @@ côté hébergeur (aucune route ne doit être adressable de toute façon).
 
 - `src/store/store.ts` — `store` + `persistor` : persistance **AsyncStorage** (= localStorage sur le web) via redux-persist, clé `racine`, `whitelist: ['utilisateur']` — seule la tranche utilisateur survit au redémarrage.
 - `src/store/utilisateur.ts` — tranche `utilisateur` conforme au serveur pyCodebara2 : `idUser` (`id`), `nickname`, `mail`, `amount`, `hash` (champ interne opaque), **`apiToken`** (`API_TOKEN` long) + **`requestToken`** (`API_REQUEST_TOKEN` une-requête, rotatif) ; actions `seConnecter` / `renouvelerRequestToken` (rotation §3.3) / `modifierProfil` (payload partiel — mairie) / `seDeconnecter` ; export `UTILISATEUR_DEBUG` (bypass debug : id `-9999`, nickname `GOD`, hash `null`, tokens `null`, mail `codebara@free.fr`). Le mot de passe clair n'est jamais stocké (envoi : `sha256Hex(mail_exact + motDePasseClair)`, §3.2 — `src/utils/hash.ts`).
-- `src/services/api.ts` — client HTTP du serveur (contrat : `integration-client.md` à la racine) : auth login/pass (`GET /user/auth` — §5.2a), auth par tokens (§5.2b), `POST /user` (création — §5.1), `POST /user/renew-password` (§5.9), `PUT /user` (maj profil mairie — §5.10), `POST /card` (génération depuis un code-barres — §5.3, timeout dédié **150 s**, réponse synchrone `card` ou asynchrone `cardid` seul), `GET /card` (liste — §5.4), `GET /card/{id}` (une carte + son fichier — §5.5), `PUT /card/name` (renommage — §5.7, réponse `{cid, card}` sans checksum) ; appels protégés **sérialisés** (§9.1), **rotation** du `API_REQUEST_TOKEN` sur tout succès (§3.3), **mort de session** (« Invalid REQUEST TOKEN ») ET **sortie volontaire** (`quitterSession`, déconnexion mairie) = reset tranche + purge + `/login`, timeout 10 s (hors génération, §2), base URL `EXPO_PUBLIC_SERVER_URL`.
+- `src/services/api.ts` — client HTTP du serveur (contrat : `integration-client.md` à la racine) : auth login/pass (`GET /user/auth` — §5.2a), auth par tokens (§5.2b), `POST /user` (création — §5.1), `POST /user/renew-password` (§5.9), `PUT /user` (maj profil mairie — §5.10), `POST /card` (génération depuis un code-barres — §5.3, timeout dédié **150 s**, réponse synchrone `card` ou asynchrone `cardid` seul), `GET /card` (liste — §5.4), `GET /card/{id}` (une carte + son fichier — §5.5), `PUT /card/name` (renommage — §5.7, réponse `{cid, card}` sans checksum) ; appels protégés **sérialisés** (§9.1), **rotation** du `API_REQUEST_TOKEN` sur tout succès (§3.3), **mort de session** (« Invalid REQUEST TOKEN ») ET **sortie volontaire** (`quitterSession`, déconnexion mairie) = reset tranche + purge + fenêtre connexion (`remplacer`, navigateur), timeout 10 s (hors génération, §2), base URL `EXPO_PUBLIC_SERVER_URL`.
 - `src/services/collection.ts` — **cache collection local** (§6.6) : archives `.cdz` + index des noms, dans un répertoire par id utilisateur — natif : `expo-file-system` API nouvelle (`Paths.document/<idUser>/<carteId>.cdz`, sandbox privé : accessible uniquement par l'application) ; web : **IndexedDB** custom (base `codebara-cdz`, expo-file-system est natif-only). Méthodes : `lireIndex`/`majIndex`/`enregistrerCarte`/`lireCarteLocale`.
-- `src/utils/cdz.ts` — pipeline `.cdz` : signature ZIP (garde-fou anti tar.xz §5.7), unzip **jszip**, `sha256(bytes)` via `expo-crypto.digest` (contrôle global == `checksum` == `cardHash`, §6.3), contrôles `hashs.json` internes (front/back/perso/datas), `datas.json` parsing tolérant (§6.4). Décision produit : **ZIP uniquement**. `src/utils/base64.ts` — encode/decode pur JS (Hermes).
+- `src/utils/cdz.ts` — pipeline `.cdz` : signature ZIP (garde-fou anti tar.xz §5.7), unzip **jszip**, `sha256(bytes)` via `expo-crypto.digest` (contrôle global == `checksum` == `cardHash`, §6.3), contrôles `hashs.json` internes (front/back/perso/datas), `datas.json` parsing tolérant (§6.4). Décision produit : **ZIP uniquement**. `extraireApercu(bytes)` — extraction **allégée** (front.png + datas.json, sans les contrôles §6.3) pour les aperçus de la grille maison ; les contrôles complets restent réservés à la fenêtre détail. `src/utils/base64.ts` — encode/decode pur JS (Hermes).
 - `src/store/hooks.ts` — hooks typés `useAppDispatch` / `useAppSelector` : à utiliser partout, jamais les hooks bruts de react-redux.
-- Montage : `Provider` + `PersistGate` dans `src/app/_layout.tsx`.
+- Montage : `SafeAreaProvider` + `Provider` + `PersistGate` dans `App.tsx` (registerRootComponent ne monte pas de SafeAreaProvider — c'était expo-router qui le faisait).
 - Redux DevTools : web → extension navigateur (RTK l'active par défaut) ; natif en dev → `@redux-devtools/remote` branché sur le store (`src/store/store.ts`, chemin `__DEV__` non-web), moniteur `npx --yes @redux-devtools/cli redux-devtools` sur le port 8000 et, pour un téléphone physique, `EXPO_PUBLIC_DEVTOOLS_HOST=<IP LAN>` au démarrage. Hermes n'ayant pas le global `crypto` (Web Crypto) requis par `uuid` — transport devtools via socketcluster-client — le store installe un polyfill `global.crypto` via `expo-crypto` **avant** le `require('@redux-devtools/remote')`.
-- Déconnexion (bouton du menu latéral, fenêtre principale uniquement) : `dispatch(seDeconnecter())` + `persistor.purge()` puis `router.replace('/login')`.
+- Déconnexion (bouton du menu latéral, fenêtre principale uniquement) : `dispatch(seDeconnecter())` + `persistor.purge()` puis `remplacer(connexion)` (`src/navigation/navigateur.ts`).
 
 ## Dossiers natifs
 

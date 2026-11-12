@@ -1,13 +1,15 @@
 # Fenêtre arène
 
+Fenêtre : `arene` — `App.tsx` monte `components/fenetre-vierge.tsx` avec l'en-tête maison.
+
 ## Rôle
 
-Route `/arene` : fenêtre « vierge » en attente de son contenu réel (branchement serveur à venir).
+Fenêtre « vierge » en attente de son contenu réel (branchement serveur à venir).
 
 ## Structure visuelle
 
 - Plein écran blanc, sans contenu.
-- Barre de navigation native (expo-router) : titre « Arène » + bouton de retour natif (web compris).
+- Barre d'en-tête maison (`src/components/entete-ecran.tsx`) : titre « Arène » + bouton de retour.
 
 ## États
 
@@ -15,5 +17,5 @@ Route `/arene` : fenêtre « vierge » en attente de son contenu réel (branchem
 
 ## Navigation
 
-- Entrée : tap la zone arène sur la carte (fenêtre principale).
-- Sortie : bouton retour de la barre de navigation native → `router.back()`. En natif, le geste système s'ajoute.
+- Entrée : tap la zone arène sur la carte (fenêtre principale) ou le menu latéral.
+- Sortie : bouton retour de la barre d'en-tête → `retourner()` (dépile vers la fenêtre principale). En natif, le bouton système s'ajoute.

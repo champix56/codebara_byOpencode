@@ -1,6 +1,6 @@
 # Fenêtre mairie
 
-Route : `/mairie` — fichier `src/components/mairie-ecran.tsx` (monté par `src/app/mairie.tsx`)
+Fenêtre : `mairie` — fichier `src/components/mairie-ecran.tsx` (rendu par `App.tsx` avec l'en-tête maison)
 
 ## Rôle
 
@@ -30,7 +30,7 @@ Informations **personnelles** du compte et leur **modification** via `PUT /user`
 - `evaluerMotDePasse(clair)` (`src/utils/motDePasse.ts`) : 5 règles (spécial, minuscule, majuscule, chiffre, longueur > 7) → `nbRespectees`, `toutesRespectees`, `niveau`. La règle de l'app est **plus stricte** que la référence serveur (≥ 7 car., pas de chiffre exigé) ; le contrat §5.10 délègue expressément la validation au client, le serveur ne vérifie que la forme du hash `[0-9a-f]{64}`.
 - Pseudo : `modifierUtilisateurServeur({ nickname })` → `PUT /user` — réponse 200 = profil à jour + `API_REQUEST_TOKEN` renouvelé (rotation gérée dans `appelProtege`) → `dispatch(modifierProfil({ nickname, hash }))` depuis la réponse.
 - Mot de passe : `modifierUtilisateurServeur({ motDePasseClair })` → hachage `hacherMotDePasse(mail_courant, clair)` (`src/utils/hash.ts`, §3.2) — `mail_final` = mail de session (l'écran ne change pas le mail). La promesse ne se résout **que sur 200** (`lireJson` lève sur 400/403) ;
-  - **sur 200 → `quitterSession()`** (`src/services/api.ts`, exporté) : `seDeconnecter` + `persistor.purge()` + `router.replace('/login')` — déconnexion voulue même si le contrat précise que la session resterait valable (décision produit : l'utilisateur se reconnecte avec le nouveau mot de passe) ;
+  - **sur 200 → `quitterSession()`** (`src/services/api.ts`, exporté) : `seDeconnecter` + `persistor.purge()` + `remplacer({ nom: 'connexion' })` — déconnexion voulue même si le contrat précise que la session resterait valable (décision produit : l'utilisateur se reconnecte avec le nouveau mot de passe) ;
   - « Invalid REQUEST TOKEN » (session morte) → même gestion centralisée (le catch de l'écran ignore l'`ErreurSession`, navigation déjà enclenchée) ;
   - `Forbidden` 403 : mail mal formé / déjà utilisé / hash non conforme — théoriquement impossible ici (hash toujours en 64 hex minuscules) ; affiché en rouge si survenant.
 - Sans session (GOD) : bouton mot de passe désactivé ; le nick reste sauvegardé localement (message dédié).
@@ -38,8 +38,8 @@ Informations **personnelles** du compte et leur **modification** via `PUT /user`
 ## Navigation
 
 - Entrée : bouton « Mairie » du **menu latéral** de la fenêtre principale.
-- Sortie normale : retour de la barre de navigation native → `router.back()`.
-- Sortie après changement de mot de passe : **automatique** → `/login` (déconnexion).
+- Sortie normale : retour de la barre d'en-tête maison → `retourner()`.
+- Sortie après changement de mot de passe : **automatique** → fenêtre connexion (déconnexion).
 
 ## Notes
 

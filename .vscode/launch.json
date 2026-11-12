@@ -2,12 +2,12 @@
   // Débogage web de l'app codEbara — Chrome lancé et contrôlé par VS Code.
   // Prérequis : serveur de dev démarré (`npm run web` → http://localhost:8081).
   //
-  // Contexte (mesuré le 2026-11-03) : le serveur Metro sert UN bundle unique
-  // (node_modules/expo-router/entry.bundle, tout inliné) accompagné d'UNE
-  // sourcemap « sectionnée » (~10 Mo, 1 section par module) dont les entrées
-  // `sources` sont des chemins ABSOLUS du poste (/home/champix/…/src/…). La
-  // règle ci-dessous les ramène au workspace : les points d'arrêt se posent
-  // directement dans les .ts/.tsx de l'éditeur.
+  // Contexte (mesuré le 2026-11-03 ; entrée `index.ts` depuis 2026-11-11) :
+  // le serveur Metro sert UN bundle unique (point d'entrée index.ts, tout
+  // inliné) accompagné d'UNE sourcemap « sectionnée » (1 section par module)
+  // dont les entrées `sources` sont des chemins ABSOLUS du poste
+  // (/home/champix/…/src/…). La règle ci-dessous les ramène au workspace :
+  // les points d'arrêt se posent directement dans les .ts/.tsx de l'éditeur.
   // (Adaptateur js-debug intégré à VS Code ; la clef admet ${workspaceFolder}.)
   "version": "0.2.0",
   "configurations": [

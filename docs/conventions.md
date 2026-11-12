@@ -13,11 +13,11 @@ Les API Expo changent à chaque release SDK — ne pas se fier à ses souvenirs.
 2. Consulter les docs de cette version : `https://docs.expo.dev/versions/v<majeur>.0.0/`.
 3. Sinon, `https://docs.expo.dev/llms.txt` — index complet des docs avec corrections des idées reçues courantes des LLM. Suivre le lien vers la page précise visée.
 
-## Organisation du code (cible Expo Router)
+## Organisation du code (SPA sans router)
 
-- Routes dans `src/app/` — un fichier = un écran, `_layout.tsx` = navigators.
-- Composants, hooks et utilitaires restent **hors de** `src/app/`.
-- Imports de navigation : `Link`, `router`, `useLocalSearchParams` depuis `expo-router`.
+- **Aucune route, aucune URL** : navigation par état via `src/navigation/navigateur.ts` (`naviguer`, `remplacer`, `retourner`, type `Fenetre`) — jamais de lib de routing, jamais d'écriture d'historique navigateur.
+- Écrans racine dans `src/ecrans/` (chargement, connexion, principal) ; les autres fenêtres sont rendues par `App.tsx` (en-tête maison `src/components/entete-ecran.tsx`).
+- Composants, hooks et utilitaires restent **hors de** `src/ecrans/`.
 - État global : Redux Toolkit dans `src/store/` (tranches + persistance redux-persist) — toujours les hooks typés `useAppDispatch` / `useAppSelector` de `src/store/hooks.ts`.
 - Variante de plateforme : un composant commun peut avoir un frère `.web.tsx` choisi par Metro au même import (ex. `usine-ecran.tsx` = caméra natif, `usine-ecran.web.tsx` = saisie manuelle web) — jamais de `Platform.OS` pour tout un écran.
 
@@ -39,7 +39,7 @@ Les API Expo changent à chaque release SDK — ne pas se fier à ses souvenirs.
 
 Chaque écran (« fenêtre ») demandé par l'utilisateur est décrit dans **un fichier Markdown dédié**, jamais dans la conversation, afin de limiter l'usage de tokens :
 
-- Emplacement : `docs/screens/<id>.md` — un fichier par écran, `<id>` en kebab-case correspondant au nom de l'écran ou de la route.
+- Emplacement : `docs/screens/<id>.md` — un fichier par écran, `<id>` en kebab-case correspondant au nom de la fenêtre.
 - Si le fichier existe déjà, le lire et le mettre à jour en place.
 - Squelette attendu : Rôle, Structure visuelle, États, Navigation (+ notes utiles), en français et concis.
 - Ajouter le fichier à l'index de [`screens/README.md`](./screens/README.md).

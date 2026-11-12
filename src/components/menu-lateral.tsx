@@ -1,23 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { naviguer, remplacer, type Fenetre } from '../navigation/navigateur';
 import { persistor } from '../store/store';
 import { useAppDispatch } from '../store/hooks';
 import { seDeconnecter } from '../store/utilisateur';
 
 // Fenêtres accessibles depuis le menu latéral de la fenêtre principale.
-const DESTINATIONS = [
-  { route: '/usine', libelle: 'Usine' },
-  { route: '/maison', libelle: 'Maison' },
-  { route: '/mairie', libelle: 'Mairie' },
-  { route: '/boutique', libelle: 'Boutique' },
-  { route: '/arene', libelle: 'Arène' },
-] as const;
+const DESTINATIONS: { fenetre: Fenetre; libelle: string }[] = [
+  { fenetre: { nom: 'usine' }, libelle: 'Usine' },
+  { fenetre: { nom: 'maison' }, libelle: 'Maison' },
+  { fenetre: { nom: 'mairie' }, libelle: 'Mairie' },
+  { fenetre: { nom: 'boutique' }, libelle: 'Boutique' },
+  { fenetre: { nom: 'arene' }, libelle: 'Arène' },
+];
 
 const LARGEUR_MENU = 280;
-
-type RouteMenu = (typeof DESTINATIONS)[number]['route'];
 
 type Props = { ouvert: boolean; onFermer: () => void };
 
@@ -42,17 +40,18 @@ export default function MenuLateral({ ouvert, onFermer }: Props) {
   }, [ouvert, progression]);
 
   // Déconnexion : réinitialise la tranche utilisateur, efface sa persistance
-  // (stockage local) puis retour à la fenêtre de connexion.
+  // (stockage local) puis retour à la fenêtre de connexion (remplacement :
+  // pas de retour arrière vers la fenêtre principale).
   const deconnecter = () => {
     dispatcher(seDeconnecter());
     persistor.purge();
     onFermer();
-    router.replace('/login');
+    remplacer({ nom: 'connexion' });
   };
 
-  const ouvrirFenetre = (route: RouteMenu) => {
+  const ouvrirFenetre = (fenetre: Fenetre) => {
     onFermer();
-    router.push(route);
+    naviguer(fenetre);
   };
 
   return (
@@ -80,9 +79,9 @@ export default function MenuLateral({ ouvert, onFermer }: Props) {
         <Text style={styles.titreMenu}>Fenêtres</Text>
         {DESTINATIONS.map((destination) => (
           <Pressable
-            key={destination.route}
+            key={destination.libelle}
             style={({ pressed }) => [styles.item, pressed && styles.itemAppuye]}
-            onPress={() => ouvrirFenetre(destination.route)}
+            onPress={() => ouvrirFenetre(destination.fenetre)}
           >
             <Text style={styles.itemTexte}>{destination.libelle}</Text>
           </Pressable>

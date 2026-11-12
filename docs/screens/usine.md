@@ -1,6 +1,6 @@
 # Fenêtre usine (scanner + fabrication de carte)
 
-Route : `/usine` — fichiers `src/components/usine-ecran.tsx` (natif) / `usine-ecran.web.tsx` (web), popup partagée `src/components/fabrication-carte.tsx`
+Fenêtre : `usine` — fichiers `src/components/usine-ecran.tsx` (natif) / `usine-ecran.web.tsx` (web), popup partagée `src/components/fabrication-carte.tsx` (rendu par `App.tsx` avec l'en-tête maison)
 
 ## Rôle
 
@@ -36,7 +36,7 @@ Scanner de codes-barres produits (EAN-8, EAN-13, UPC-A, UPC-E via caméra ; + UP
 ## Navigation
 
 - Entrée : tap la zone usine sur la carte (fenêtre principale).
-- Sortie : bouton retour natif → `router.back()` ; la fermeture de la popup ne quitte pas la fenêtre.
+- Sortie : bouton retour de la barre d'en-tête maison → `retourner()` (dépile vers la fenêtre principale) ; la fermeture de la popup ne quitte pas la fenêtre.
 
 ## Notes
 

@@ -1,13 +1,15 @@
 # Fenêtre boutique
 
+Fenêtre : `boutique` — `App.tsx` monte `components/fenetre-vierge.tsx` avec l'en-tête maison.
+
 ## Rôle
 
-Route `/boutique` : fenêtre « vierge » en attente de son contenu réel (branchement serveur à venir).
+Fenêtre « vierge » en attente de son contenu réel (branchement serveur à venir).
 
 ## Structure visuelle
 
 - Plein écran blanc, sans contenu.
-- Barre de navigation native (expo-router) : titre « Boutique » + bouton de retour natif (web compris).
+- Barre d'en-tête maison (`src/components/entete-ecran.tsx`) : titre « Boutique » + bouton de retour.
 
 ## États
 
@@ -15,5 +17,5 @@ Route `/boutique` : fenêtre « vierge » en attente de son contenu réel (branc
 
 ## Navigation
 
-- Entrée : tap la zone boutique sur la carte (fenêtre principale).
-- Sortie : bouton retour de la barre de navigation native → `router.back()`. En natif, le geste système s'ajoute.
+- Entrée : tap la zone boutique sur la carte (fenêtre principale) ou le menu latéral.
+- Sortie : bouton retour de la barre d'en-tête → `retourner()` (dépile vers la fenêtre principale). En natif, le bouton système s'ajoute.

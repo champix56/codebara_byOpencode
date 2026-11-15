@@ -47,3 +47,10 @@ yarn-error.*
 
 # paquets d'-assets externes (.cdz = zip binaire, hors assets Expo) — jamais versionnés
 *.cdz
+
+# certificats sensibles du serveur de développement (auto-signé, §HTTPS) —
+# générés par scripts/generer-certificats.sh, jamais versionnés
+/cert.pem
+/key.pem
+/champix-dev.mobileconfig
+certs/

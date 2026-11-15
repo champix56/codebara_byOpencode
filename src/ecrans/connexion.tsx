@@ -10,7 +10,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Constants from 'expo-constants';
 import { remplacer } from '../navigation/navigateur';
 import { authentifierParLogin, creerCompte, renouvelerMotDePasse, ErreurApi } from '../services/api';
 import { useAppDispatch } from '../store/hooks';

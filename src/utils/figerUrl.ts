@@ -13,12 +13,14 @@
 //    « / » dans une seule écriture, avant le montage de l'app : le flux repart
 //    du splash (fenêtre « chargement »), aucun chemin ne peut sélectionner une
 //    page. En natif la fenêtre n'a pas d'URL : tout est sans effet (garde
-//    `typeof window`).
+//    `Platform.OS === 'web'` — sur natif, `window` existe mais sans `history`).
 //
 // Idempotence assurée par un marqueur posé sur `window`, car le module peut
 // être réévalué (Fast Refresh) ; le test headless de 2026-11-03 (Chrome) et le
 // contrôle hors navigateur `scripts/verifier-figer-url.mjs` verrouillent ce
 // comportement.
+
+import { Platform } from 'react-native';
 
 type FenetreAvecMarqueur = Window & typeof globalThis & { __urlFige?: boolean };
 
@@ -26,7 +28,11 @@ type FenetreAvecMarqueur = Window & typeof globalThis & { __urlFige?: boolean };
 // déclenchement antérieur). Le `state` éventuellement écrit est conservé tel
 // quel : seul le chemin cible est réécrit vers « / ».
 export function verrouillerUrlRacine(): void {
-  if (typeof window === 'undefined') return; // natif : pas de barre d'adresse
+  // Natif : pas de barre d'adresse. Le garde `typeof window` seul ne suffit
+  // pas : dans le runtime React Native (Hermes), `window` EXISTE (alias du
+  // global) mais n'a pas de `history` — sur Android, l'appel au démarrage
+  // plantait sur `window.history.pushState` (TypeError 2026-11-12).
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
   const fenetre = window as FenetreAvecMarqueur;
   if (fenetre.__urlFige) return;
   fenetre.__urlFige = true;

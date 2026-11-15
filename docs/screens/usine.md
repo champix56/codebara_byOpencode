@@ -20,7 +20,7 @@ Scanner de codes-barres produits (EAN-8, EAN-13, UPC-A, UPC-E via caméra ; + UP
 ### Popup « fabrication » (Modal, partagée natif/web)
 
 - **Génération** : spinner vert + « Génération en cours — … jusqu'à 2 minutes » (fermeture non proposée pendant l'attente).
-- **Éclosion** : titre « Éclosion — carte #id », **visuel 3D en vitrine de musée** (`visuel-carte.tsx`, 220 px — carte front/back tournables au glissement : 360° horizontal, ±30° vertical avec reflets de lumière, présentée sur un pupitre éclairé par un spot), champ « Nom de la carte » (placeholder « Obligatoire », 60 car. max), bouton « Envoyer le nom » (désactivé si vide ou en envoi — libellé « Envoi… »).
+- **Éclosion** : titre « Éclosion — carte #id », **visuel 3D en vitrine de musée pleine largeur** (`visuel-carte.tsx`, carte 220 px — recto `front.png` par défaut, verso `back.png` passé 90° ; 360° horizontal, ±30° vertical avec reflets de lumière ; pupitre + spot + fond lointain en parallaxe), champ « Nom de la carte » (placeholder « Obligatoire », 60 car. max), bouton « Envoyer le nom » (désactivé si vide ou en envoi — libellé « Envoi… »).
 - **Sans fichier** (réponse asynchrone §5.3 à venir) : « Carte #id créée — apparaîtra dans la maison une fois finalisée » + « Compris ».
 - **Erreur** : titre « Échec de fabrication », message rouge, bouton gris « Fermer ».
 

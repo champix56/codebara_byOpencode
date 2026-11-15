@@ -1,29 +1,37 @@
 import { useMemo, useState } from 'react';
-import { Image, PanResponder, StyleSheet, View } from 'react-native';
+import {
+  Image,
+  PanResponder,
+  Platform,
+  StyleSheet,
+  View,
+  type ViewStyle,
+} from 'react-native';
 import { encoderBase64 } from '../utils/base64';
 import { type Cdz } from '../utils/cdz';
 
 // Visuel 3D d'une carte extraite d'une archive .cdz (contrat §6.2) — mise en
-// scène « vitrine de musée » : la carte est posée sur un pupitre (dalle, fût,
-// socle) dans une ambiance sombre, éclairée par un spot plafonnier (faisceau
-// triangulaire + halo chaud) ; son ombre glisse sur la dalle avec la rotation.
-// Sert à la réception d'une carte fabriquée (popup éclosion de l'usine) et à
-// l'affichage détaillé de la fenêtre « carte ».
+// scène « vitrine de musée » : la vitrine occupe TOUTE la largeur du parent,
+// la carte est posée sur un pupitre (dalle, fût, socle) dans une ambiance
+// sombre éclairée par un spot plafonnier (faisceau triangulaire + halo chaud),
+// son ombre glisse sur la dalle avec la rotation, et le fond lointain bouge en
+// parallaxe (moins que l'ombre) sous une vignette — il paraît plus loin que la
+// carte. Sert à la réception d'une carte fabriquée (popup éclosion de l'usine)
+// et à l'affichage détaillé de la fenêtre « carte ».
 //
-// Interaction (pointeur sur le navigateur, doigt en natif — même système
-// répondeur React Native, cf. PanResponder, sur toute la vitrine) :
-//  - glisser HORIZONTALEMENT fait tourner la carte, rotation complète illimitée
-//    (360° et plus) — le dos apparaît passé 90° (backfaceVisibility) ;
-//  - glisser VERTICALEMENT incline la carte, bornée ±30°, pour faire apparaître
-//    les reflets de lumière.
+// Deux faces : front.png (recto, présenté par défaut) et back.png (verso, du
+// même fichier .cdz) — glisser HORIZONTALEMENT tourne la carte (360° libres),
+// passé 90° le dos apparaît ; glisser VERTICALEMENT incline la carte (±30°)
+// pour faire apparaître les reflets de lumière. Pointeur (web) ou doigt
+// (natif) — même système répondeur React Native, posé sur toute la vitrine.
 //
-// Toute la mise en scène est du pur React Native (bandes translucides, triangle
-// du faisceau par bordures) : aucune dépendance native — web, iOS et Android.
+// Tout est du pur React Native (triangle du faisceau par bordures, bandes
+// translucides) : aucune dépendance native — web, iOS et Android.
 
 type Props = {
   /** Archive extraite (front.png + back.png consommés ici). */
   cdz: Cdz;
-  /** Largeur d'affichage de la CARTE (px) — la vitrine l'encadre. */
+  /** Largeur d'affichage de la CARTE (px) — la vitrine s'étend autour. */
   largeur: number;
 };
 
@@ -61,6 +69,15 @@ const PLEIN = {
   right: 0,
   bottom: 0,
 };
+
+// Profondeur 3D réelle (web uniquement) : sans `transform-style: preserve-3d`,
+// le navigateur aplatit la composition parent (rotateY du recto) + enfant
+// (rotateY 180 du dos) — le dos apparaît alors en MIROIR passé 90°. En natif,
+// le modèle de calques compose déjà correctement (motif flip-card standard)
+// et la propriété n'existe pas dans les types — d'où le cast, web seul.
+const PROFONDEUR_WEB = (
+  Platform.OS === 'web' ? { transformStyle: 'preserve-3d' as const } : {}
+) as ViewStyle;
 
 export default function VisuelCarte({ cdz, largeur }: Props) {
   // Rotation horizontale cumulée (non bornée : plusieurs tours possibles) et
@@ -112,8 +129,9 @@ export default function VisuelCarte({ cdz, largeur }: Props) {
   );
 
   // ── Géométrie de la vitrine (tout dérive de la largeur de la carte) ──────
+  // La vitrine occupe toute la largeur du parent ; les éléments centrés sont
+  // posés à left: '50%' puis ramenés d'une demi-largeur (marge négative).
   const hauteur = largeur * RAPPORT_CARTE;
-  const sceneW = largeur * 1.6;
   const margeHaut = hauteur * 0.2; // respiration sous le spot
   const faisceauH = margeHaut + hauteur * 0.55; // le spot descend sur la carte
   const demiFaisceau = largeur * 0.75;
@@ -127,28 +145,29 @@ export default function VisuelCarte({ cdz, largeur }: Props) {
   const sceneH = dalleTop + dalleH + futH + socleH + hauteur * 0.05;
   // Ombre de la carte sur la dalle : glisse à l'opposé de la rotation.
   const decalageOmbre = -Math.sin((pose.rotationY * Math.PI) / 180) * largeur * 0.12;
+  // Fond lointain : il suit la rotation en sens inverse, beaucoup moins que
+  // l'ombre de la carte — le décalage de vitesse le pousse visuellement
+  // derrière la carte (parallaxe).
+  const parallaxe = -Math.sin((pose.rotationY * Math.PI) / 180) * largeur * 0.035;
 
   return (
-    <View
-      style={[styles.scene, { width: sceneW, height: sceneH }]}
-      {...panoramique.panHandlers}
-    >
-      {/* Ambiance : nappe de lumière ambiante, faisceau du spot plafonnier
-          (triangle par bordures — pointe en haut), halos chauds derrière la
-          carte. Tout décoratif (pointerEvents none). */}
-      <View pointerEvents="none" style={styles.ambiance}>
-        <View
-          style={[
-            styles.nappe,
-            { width: sceneW * 0.92, height: sceneH * 0.8, left: sceneW * 0.04, top: sceneH * 0.1 },
-          ]}
-        />
+    <View style={[styles.scene, { height: sceneH }]} {...panoramique.panHandlers}>
+      {/* Fond lointain : nappe ambiante, faisceau du spot plafonnier (triangle
+          par bordures — pointe en haut), halos chauds. Le calque entier est
+          légèrement agrandi et TranslateX en parallaxe : plus lent que la
+          carte, il paraît plus loin (profondeur). Décoratif. */}
+      <View
+        pointerEvents="none"
+        style={[styles.couche, { transform: [{ translateX: parallaxe }, { scale: 1.05 }] }]}
+      >
+        <View style={[styles.nappe, { height: sceneH * 0.8, top: sceneH * 0.1 }]} />
         <View
           style={[
             styles.faisceau,
             {
               top: 0,
-              left: sceneW / 2 - demiFaisceau,
+              left: '50%',
+              marginLeft: -demiFaisceau,
               borderLeftWidth: demiFaisceau,
               borderRightWidth: demiFaisceau,
               borderBottomWidth: faisceauH,
@@ -160,7 +179,8 @@ export default function VisuelCarte({ cdz, largeur }: Props) {
             styles.faisceauCoeur,
             {
               top: 0,
-              left: sceneW / 2 - demiFaisceau * 0.5,
+              left: '50%',
+              marginLeft: -demiFaisceau * 0.5,
               borderLeftWidth: demiFaisceau * 0.5,
               borderRightWidth: demiFaisceau * 0.5,
               borderBottomWidth: faisceauH * 0.85,
@@ -173,7 +193,8 @@ export default function VisuelCarte({ cdz, largeur }: Props) {
             {
               width: largeur * 1.7,
               height: largeur * 1.7,
-              left: (sceneW - largeur * 1.7) / 2,
+              left: '50%',
+              marginLeft: -(largeur * 1.7) / 2,
               top: margeHaut - hauteur * 0.12,
             },
           ]}
@@ -184,19 +205,21 @@ export default function VisuelCarte({ cdz, largeur }: Props) {
             {
               width: largeur * 1.05,
               height: largeur * 1.05,
-              left: (sceneW - largeur * 1.05) / 2,
+              left: '50%',
+              marginLeft: -(largeur * 1.05) / 2,
               top: margeHaut + hauteur * 0.1,
             },
           ]}
         />
       </View>
 
-      {/* Pupitre (dalle + fût + socle) — derrière la carte, qui se pose dessus. */}
-      <View pointerEvents="none" style={styles.ambiance}>
+      {/* Pupitre (dalle + fût + socle) — STATIQUE : c'est le sol sur lequel la
+          carte se pose, il ne doit pas se détacher d'elle. */}
+      <View pointerEvents="none" style={styles.couche}>
         <View
           style={[
             styles.dalle,
-            { top: dalleTop, left: (sceneW - dalleW) / 2, width: dalleW, height: dalleH },
+            { top: dalleTop, left: '50%', marginLeft: -dalleW / 2, width: dalleW, height: dalleH },
           ]}
         >
           <View style={styles.dalleLumiere} />
@@ -204,7 +227,13 @@ export default function VisuelCarte({ cdz, largeur }: Props) {
         <View
           style={[
             styles.fut,
-            { top: dalleTop + dalleH, left: (sceneW - futW) / 2, width: futW, height: futH },
+            {
+              top: dalleTop + dalleH,
+              left: '50%',
+              marginLeft: -futW / 2,
+              width: futW,
+              height: futH,
+            },
           ]}
         />
         <View
@@ -212,7 +241,8 @@ export default function VisuelCarte({ cdz, largeur }: Props) {
             styles.socle,
             {
               top: dalleTop + dalleH + futH,
-              left: (sceneW - socleW) / 2,
+              left: '50%',
+              marginLeft: -socleW / 2,
               width: socleW,
               height: socleH,
             },
@@ -228,23 +258,39 @@ export default function VisuelCarte({ cdz, largeur }: Props) {
           {
             width: largeur * 0.85,
             height: Math.max(8, dalleH * 0.5),
-            left: (sceneW - largeur * 0.85) / 2,
+            left: '50%',
+            marginLeft: -(largeur * 0.85) / 2,
             top: dalleTop + dalleH * 0.28,
             transform: [{ translateX: decalageOmbre }],
           },
         ]}
       />
 
+      {/* Vignette : assombrit les bords de la vitrine (deux anneaux imbriqués
+          simulant le dégradé) — l'éclairage tombe avec la distance, ce qui
+          renforce la mise en valeur de la carte au centre. */}
+      <View
+        pointerEvents="none"
+        style={[styles.vignette, { borderWidth: Math.max(12, hauteur * 0.11) }]}
+      />
+      <View
+        pointerEvents="none"
+        style={[styles.vignette2, { borderWidth: Math.max(8, hauteur * 0.05) }]}
+      />
+
       {/* Carte pivotante : la perspective est en tête de la même chaîne de
           transformations (le rendu 3D s'applique aux rotations de CET élément ;
-          la face arrière, plane, bascule par rotateY(180) + backfaceVisibility). */}
+          la face arrière, plane, bascule par rotateY(180) + backfaceVisibility,
+          et preserve-3d (web) compose les deux rotations en vraie 3D). */}
       <View
         style={[
           styles.pivot,
+          PROFONDEUR_WEB,
           {
             width: largeur,
             height: hauteur,
-            left: (sceneW - largeur) / 2,
+            left: '50%',
+            marginLeft: -largeur / 2,
             top: margeHaut,
             transform: [
               { perspective: PERSPECTIVE },
@@ -296,9 +342,11 @@ function Reflet({ rotationY, inclinaison }: { rotationY: number; inclinaison: nu
 }
 
 const styles = StyleSheet.create({
-  // ── Vitrine (scène sombre encadrée, comme une vitrine de musée) ──────────
+  // ── Vitrine (pleine largeur du parent, fond sombre encadré) ──────────────
   scene: {
-    alignSelf: 'center',
+    // Pleine largeur du parent (exigence 2026-11-12) : la vitrine s'étend
+    // autour de la carte au lieu d'un petit cadre.
+    width: '100%',
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#191d24',
@@ -310,11 +358,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 8,
   },
-  ambiance: {
+  couche: {
     ...PLEIN,
   },
   nappe: {
     position: 'absolute',
+    width: '92%',
+    left: '4%',
     borderRadius: 9999,
     backgroundColor: '#20242c',
   },
@@ -375,6 +425,22 @@ const styles = StyleSheet.create({
     position: 'absolute',
     borderRadius: 9999,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  vignette: {
+    ...PLEIN,
+    borderRadius: 9999,
+    borderLeftColor: 'rgba(9, 11, 14, 0.3)',
+    borderRightColor: 'rgba(9, 11, 14, 0.3)',
+    borderTopColor: 'rgba(9, 11, 14, 0.3)',
+    borderBottomColor: 'rgba(9, 11, 14, 0.3)',
+  },
+  vignette2: {
+    ...PLEIN,
+    borderRadius: 9999,
+    borderLeftColor: 'rgba(9, 11, 14, 0.2)',
+    borderRightColor: 'rgba(9, 11, 14, 0.2)',
+    borderTopColor: 'rgba(9, 11, 14, 0.2)',
+    borderBottomColor: 'rgba(9, 11, 14, 0.2)',
   },
   // ── Carte pivotante ──────────────────────────────────────────────────────
   pivot: {

@@ -12,7 +12,7 @@ Fenêtre : `maison` — fichier `src/components/maison-ecran.tsx` (rendu par `Ap
 - **Barre d'outils** :
   - champ de **recherche** (« Chercher par nom ou #numéro ») — insensible aux accents (« zeph » trouve « Zéphyr »), un `#id` filtre par numéro ;
   - liste déroulante **Série** (`@react-native-picker/picker`) : « Toutes les séries » + une option par saison (`datas.seasonid` des archives locales) + « Série inconnue » (cartes sans archive ou sans saison) ;
-  - **zoom** : boutons `+` / `−` encadrant « n/ligne » — de **6 cartes par ligne** (défaut web ; 3 en natif) à **2** (bornes 2..6 ; `+` agrandit les cartes, `−` les réduits).
+  - **zoom** : boutons `+` / `−` encadrant « n/ligne » — de **4 cartes par ligne** (défaut web, commit « limit 5 col by def. on list on web ») à **2** (bornes 2..6 ; `+` agrandit les cartes, `−` les réduits). Défaut natif : 3.
 - **Grille** : cellules flexwrap, cadres ratio 600/1037 (`front.png` en `resizeMode: contain`) — les cartes sans cache local affichent un cadre gris avec « #id ». Sous le cadre : **nom** (ou « Carte #id ») puis stats « P puissance · S santé · A attaque » (`datas.*` de l'archive, sinon valeurs serveur, « — » si absents).
 - États d'affichage : chargement (« Chargement de la collection… »), vide (« Aucune carte encore — passe à l'usine scanner un code-barres ! »), sans-session, erreur (rouge + bouton vert « Réessayer »), filtre sans résultat (« Aucune carte ne correspond à la recherche. »).
 

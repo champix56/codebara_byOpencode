@@ -9,13 +9,13 @@
     "@reduxjs/toolkit": "^2.13.0",
     "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
-    "expo": "~58.0.23",
+    "expo": "~58.0.25",
     "expo-build-properties": "~58.0.12",
     "expo-camera": "~58.0.14",
     "expo-constants": "~58.0.13",
-    "expo-crypto": "~58.0.7",
+    "expo-crypto": "~58.0.8",
     "expo-file-system": "~58.0.13",
-    "expo-status-bar": "~58.0.4",
+    "expo-status-bar": "~58.0.5",
     "jszip": "^3.10.2",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -40,7 +40,7 @@
     "lint": "expo lint",
     "build:web": "npx expo export -p web",
     "build:android:local": "eas build --platform android --profile preview --local",
-    "eas:fixapiurl":"eas env:set --name EXPO_PUBLIC_SERVER_URL --environment preview --visibility plaintext --value"
+    "eas:fixapiurl": "eas env:set --name EXPO_PUBLIC_SERVER_URL --environment preview --visibility plaintext --value"
   },
   "private": true
 }

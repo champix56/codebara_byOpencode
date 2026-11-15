@@ -34,12 +34,13 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
     "build:web": "npx expo export -p web",
-    "build:android:local": "eas build --platform android --profile preview --local"
+    "build:android:local": "eas build --platform android --profile preview --local",
+    "eas:fixapiurl":"eas env:set --name EXPO_PUBLIC_SERVER_URL --environment preview --visibility plaintext --value"
   },
   "private": true
 }

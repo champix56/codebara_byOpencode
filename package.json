@@ -36,7 +36,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "build:web": "npx expo export -p web"
+    "build:web": "npx expo export -p web",
+    "build:android:local":"eas build --platform android --profile preview --local"
   },
   "private": true
 }

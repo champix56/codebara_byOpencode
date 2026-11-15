@@ -32,6 +32,8 @@ import VisuelCarte from './visuel-carte';
 //  5) PUT /card/name {cid, name} (§5.7) → nouvelle archive → validation
 //     interne (ZIP uniquement — le tar.xz du bug §5.7 est refusé, la v1 reste
 //     en cache) → remplacement de la v1 par la v2 + maj de l'index du nom.
+//  6) redirection du joueur vers la fenêtre détail de la carte (celle ouverte
+//     depuis la maison) — exigence produit 2026-11-15.
 type Etape =
   | { phase: 'generer' }
   | { phase: 'eclosion'; carteId: number; cdz: Cdz }
@@ -42,7 +44,8 @@ type Props = {
   chiffres: string | null;
   surFermer: () => void;
   // Appelé après l'enregistrement complet (v2 stockée + index) — le parent
-  // affiche son toast de succès et ferme la popup.
+  // redirige (fenêtre détail de la carte, exigence produit 2026-11-15) et
+  // ferme la popup.
   surEnregistree?: (carteId: number, nom: string) => void;
 };
 
@@ -123,7 +126,10 @@ export default function FabricationCarte({ chiffres, surFermer, surEnregistree }
       await ouvrirCdz(octets);
       if (!idUser) throw new Error('Utilisateur courant inconnu');
       await enregistrerCarte(idUser, carteId, octets);
-      await majIndex(idUser, carteId, nom.trim());
+      await majIndex(idUser, carteId, nom.trim(), {
+        id: etape.cdz.datas.seasonid,
+        nom: etape.cdz.datas.saison,
+      });
       if (monteRef.current) surEnregistree?.(carteId, nom.trim());
       surFermer();
     } catch (erreur) {

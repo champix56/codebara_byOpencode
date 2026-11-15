@@ -13,7 +13,7 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import { naviguer } from '../navigation/navigateur';
 import { ErreurSession, listerCartes, type CarteListee } from '../services/api';
-import { lireCarteLocale, lireIndex } from '../services/collection';
+import { lireCarteLocale, lireIndex, type EntreeIndex } from '../services/collection';
 import { useAppSelector } from '../store/hooks';
 import { extraireApercu, type DonneesCarte } from '../utils/cdz';
 import { encoderBase64 } from '../utils/base64';
@@ -42,6 +42,16 @@ const COLONNES_MAX = 6;
 const sansAccents = (texte: string): string =>
   texte.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+// Clé d'identité d'une saison : l'id quand datas.json en porte un, sinon le
+// nom lisible (parsing opportuniste, cdz.ts) — null si la carte ne révèle
+// aucune saison.
+const cleSaison = (datas: DonneesCarte | null): string | null => {
+  if (datas === null) return null;
+  if (datas.seasonid !== null) return `id:${datas.seasonid}`;
+  if (datas.saison) return `nom:${datas.saison}`;
+  return null;
+};
+
 type EtatListe =
   | { phase: 'chargement' }
   | { phase: 'pret' }
@@ -58,7 +68,9 @@ export default function MaisonEcran() {
   const { apiToken, idUser } = useAppSelector((etat) => etat.utilisateur);
   const [etat, definirEtat] = useState<EtatListe>({ phase: 'chargement' });
   const [cartes, definirCartes] = useState<CarteListee[]>([]);
-  const [noms, definirNoms] = useState<Record<string, string>>({});
+  // Index local (§6.6) : id → { nom, saisonId?, saison? } — les saisons y
+  // sont portées pour la liste déroulante « Série ».
+  const [nomsDetail, definirNomsDetail] = useState<Record<string, EntreeIndex>>({});
   const [rafraichit, definirRafraichit] = useState(false);
 
   // Outils de la grille : recherche, filtre série, zoom (cartes par ligne).
@@ -90,13 +102,9 @@ export default function MaisonEcran() {
         if (idUser !== null) {
           try {
             const index = await lireIndex(idUser);
-            definirNoms(
-              Object.fromEntries(
-                Object.entries(index).map(([cle, entree]) => [cle, entree.nom]),
-              ),
-            );
+            definirNomsDetail(index);
           } catch {
-            definirNoms({});
+            definirNomsDetail({});
           }
         }
         definirEtat(liste.length === 0 ? { phase: 'vide' } : { phase: 'pret' });
@@ -161,42 +169,76 @@ export default function MaisonEcran() {
       if (requete !== '') {
         const apercu = apercus[carte.id];
         const nom = sansAccents(
-          (apercu?.datas.name ?? noms[String(carte.id)] ?? '').toLowerCase(),
+          (apercu?.datas.name ?? nomsDetail[String(carte.id)]?.nom ?? '').toLowerCase(),
         );
         const visible = nom.includes(requete) || (numero !== '' && String(carte.id).includes(numero));
         if (!visible) return false;
       }
       if (serie !== 'toutes') {
-        const saison = apercus[carte.id]?.datas.seasonid ?? null;
+        const cle = cleSaison(apercus[carte.id]?.datas ?? null);
         if (serie === 'inconnue') {
-          if (saison !== null) return false;
-        } else if (saison === null || String(saison) !== serie) {
+          if (cle !== null) return false;
+        } else if (cle === null || cle !== serie) {
           return false;
         }
       }
       return true;
     });
-  }, [cartes, apercus, noms, recherche, serie]);
+  }, [cartes, apercus, nomsDetail, recherche, serie]);
 
-  // Options de la liste déroulante : saisons découvertes dans les archives
-  // locales (triées) + « inconnue » seulement si des cartes en manquent.
+  // Options de la liste déroulante : saisons découvertes chez l'utilisateur
+  // (aperçus locaux + index des noms, qui porte la saison lue dans datas.json
+  // à la génération / au détail) + « inconnue » si des cartes en manquent.
+  // Le libellé est le NOM de la saison quand l'archive en porte un, sinon
+  // « Série n » sur l'identifiant — exigence produit 2026-11-15.
   const optionsSerie = useMemo(() => {
-    const saisons = new Set<number>();
+    type SaisonConnue = { id: number | null; nom: string | null };
+    const saisons = new Map<string, SaisonConnue>();
     let inconnues = false;
+    const retenue = (cle: string, id: number | null, nom: string | null) => {
+      const existante = saisons.get(cle);
+      if (!existante || (nom && !existante.nom)) {
+        saisons.set(cle, { id, nom: nom ?? existante?.nom ?? null });
+      }
+    };
     for (const carte of cartes) {
-      const saison = apercus[carte.id]?.datas.seasonid ?? null;
-      if (saison === null) inconnues = true;
-      else saisons.add(saison);
+      const datas = apercus[carte.id]?.datas ?? null;
+      const cle = cleSaison(datas);
+      if (cle === null) inconnues = true;
+      else retenue(cle, datas?.seasonid ?? null, datas?.saison ?? null);
+    }
+    // L'index (mis à jour à la génération §6.1) révèle les saisons des cartes
+    // dont l'aperçu local n'est pas chargé.
+    for (const entree of Object.values(nomsDetail)) {
+      const cle =
+        entree.saisonId !== null && entree.saisonId !== undefined
+          ? `id:${entree.saisonId}`
+          : entree.saison
+            ? `nom:${entree.saison}`
+            : null;
+      if (cle === null) continue;
+      retenue(cle, entree.saisonId ?? null, entree.saison ?? null);
     }
     const options: { valeur: FiltreSerie; libelle: string }[] = [
       { valeur: 'toutes', libelle: 'Toutes les séries' },
     ];
-    for (const saison of [...saisons].sort((a, b) => a - b)) {
-      options.push({ valeur: String(saison), libelle: `Série ${saison}` });
+    const classees = [...saisons.entries()].sort((a, b) => {
+      const identA = a[1].id;
+      const identB = b[1].id;
+      if (identA !== null && identB !== null) return identA - identB;
+      if (identA !== null) return -1;
+      if (identB !== null) return 1;
+      return a[0].localeCompare(b[0]);
+    });
+    for (const [cle, saison] of classees) {
+      options.push({
+        valeur: cle,
+        libelle: saison.nom ?? `Série ${saison.id ?? cle}`,
+      });
     }
     if (inconnues) options.push({ valeur: 'inconnue', libelle: 'Série inconnue' });
     return options;
-  }, [cartes, apercus]);
+  }, [cartes, apercus, nomsDetail]);
 
   return (
     <ScrollView
@@ -293,7 +335,7 @@ export default function MaisonEcran() {
               {cartesFiltrees.map((carte) => {
                 const apercu = apercus[carte.id];
                 const nom =
-                  apercu?.datas.name ?? noms[String(carte.id)] ?? '';
+                  apercu?.datas.name ?? nomsDetail[String(carte.id)]?.nom ?? '';
                 const libelle = nom !== '' ? nom : `Carte #${carte.id}`;
                 const puissance = apercu?.datas.power ?? carte.cardpower ?? '—';
                 const sante = apercu?.datas.health ?? carte.health ?? '—';

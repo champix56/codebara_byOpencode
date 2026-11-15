@@ -81,7 +81,12 @@ export async function verifierEtRecuperer(
     const octets = cdzDepuisBase64(telechargee.cardBase64);
     const cdz = await ouvrirCdz(octets, telechargee.cardHash ?? carte.cardHash ?? undefined);
     await enregistrerCarte(idUser, carte.id, octets);
-    if (cdz.datas.name) await majIndex(idUser, carte.id, cdz.datas.name);
+    if (cdz.datas.name) {
+      await majIndex(idUser, carte.id, cdz.datas.name, {
+        id: cdz.datas.seasonid,
+        nom: cdz.datas.saison,
+      });
+    }
   }
   retours.surProgression?.('telechargement', aRecuperer.length, aRecuperer.length);
 }

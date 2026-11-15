@@ -11,14 +11,14 @@ Fenêtre : `maison` — fichier `src/components/maison-ecran.tsx` (rendu par `Ap
 - Fond blanc, `ScrollView` + tirer-pour-actualiser, contenu centré (max 560 px), titre « Mes cartes ».
 - **Barre d'outils** :
   - champ de **recherche** (« Chercher par nom ou #numéro ») — insensible aux accents (« zeph » trouve « Zéphyr »), un `#id` filtre par numéro ;
-  - liste déroulante **Série** (`@react-native-picker/picker`) : « Toutes les séries » + une option par saison (`datas.seasonid` des archives locales) + « Série inconnue » (cartes sans archive ou sans saison) ;
+  - liste déroulante **Série** (`@react-native-picker/picker`) : « Toutes les séries » + une option par saison — **le NOM de la saison quand l'archive le porte** (`datas.json`, parsing opportuniste `season`/`seasonName`, exigence 2026-11-15), sinon « Série n » (identifiant `seasonid`) + « Série inconnue » (cartes sans archive ou sans saison) ;
   - **zoom** : boutons `+` / `−` encadrant « n/ligne » — de **4 cartes par ligne** (défaut web, commit « limit 5 col by def. on list on web ») à **2** (bornes 2..6 ; `+` agrandit les cartes, `−` les réduits). Défaut natif : 3.
 - **Grille** : cellules flexwrap, cadres ratio 600/1037 (`front.png` en `resizeMode: contain`) — les cartes sans cache local affichent un cadre gris avec « #id ». Sous le cadre : **nom** (ou « Carte #id ») puis stats « P puissance · S santé · A attaque » (`datas.*` de l'archive, sinon valeurs serveur, « — » si absents).
 - États d'affichage : chargement (« Chargement de la collection… »), vide (« Aucune carte encore — passe à l'usine scanner un code-barres ! »), sans-session, erreur (rouge + bouton vert « Réessayer »), filtre sans résultat (« Aucune carte ne correspond à la recherche. »).
 
 ## États
 
-- `etat` : `chargement` / `pret` / `vide` / `sans-session` / `erreur` ; `cartes`, `noms` (Record id → nom, index local), `rafraichit` ; outils : `recherche`, `serie` ('toutes' / 'inconnue' / String(saison)), `colonnes` (2..6) ; `apercus` (Record id → { image data URI, datas }).
+- `etat` : `chargement` / `pret` / `vide` / `sans-session` / `erreur` ; `cartes`, `nomsDetail` (Record id → index local { nom, saisonId?, saison? }), `rafraichit` ; outils : `recherche`, `serie` ('toutes' / 'inconnue' / clé de saison `id:n` ou `nom:<nom>`), `colonnes` (2..6) ; `apercus` (Record id → { image data URI, datas }).
 - Chargement à l'ouverture uniquement ; tirer-pour-actualiser relance ; appels protégés **sérialisés** (contrat §9.1). Rotation du request-token au succès (service).
 - **Aperçus** : lecture **séquentielle** des archives locales (`lireCarteLocale` + `extraireApercu`, sans contrôles d'intégrité §6.3), une à une pour ne pas bloquer l'UI, annulée au démontage ; chaque id n'est tenté qu'une fois (`tenteRef` — un rafraîchissement ne relit pas les archives déjà couvertes). Une archive illisible reste sans aperçu (le détail la re-téléchargera, §5.5).
 - Mort de session (« Invalid REQUEST TOKEN ») : reset + purge + connexion centralisés — l'écran ignore l'erreur.
@@ -34,7 +34,7 @@ Fenêtre : `maison` — fichier `src/components/maison-ecran.tsx` (rendu par `Ap
 ## Notes
 
 - Contrat : `integration-client.md` à la racine (§5.4 liste sans noms ; §5.5 fichier ; §6.6 cache collection).
-- **Série** = `seasonid` de `datas.json` du `.cdz` local (aucune autre notion de série côté serveur) — les options du select se construisent depuis les aperçus chargés ; « Série inconnue » n'apparaît que si des cartes en manquent.
+- **Série** = saison de `datas.json` du `.cdz` local (aucune autre notion de série côté serveur) — identité = `seasonid` si présent, sinon le nom lisible (`cleSaison`). Les options se construisent depuis les aperçus chargés **et** l'index local des noms/saisons (`majIndex` alimenté à la génération §6.1, au renommage et au détail chargé) — la liste des saisons est donc disponible même pour les cartes dont l'aperçu n'est pas encore chargé ; « Série inconnue » n'apparaît que si des cartes en manquent.
 - **Web** : cache en IndexedDB (`codebara-cdz` v1, places `cartes`/`index`) ; le Picker rend un `<select>` natif.
 - **Web** : aucune URL n'apparaît dans le navigateur — règle globale d'URL figée à la racine (`src/utils/figerUrl.ts`, cf. `docs/architecture.md`).
 - Validé navigateur headless (CDP, 2026-11-12) : 8 cellules / 7 aperçus, zoom 16.67 %→50 %→16.67 % avec bornes, recherche + filtres, détail/retour, URL « / », zéro exception.

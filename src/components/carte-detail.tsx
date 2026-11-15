@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
   ErreurApi,
+  renommerCarte,
   telechargerCarte,
 } from '../services/api';
 import { enregistrerCarte, lireCarteLocale, majIndex } from '../services/collection';
@@ -14,7 +15,8 @@ import VisuelCarte from './visuel-carte';
 // l'archive .cdz vient du cache local <idUser>/<carteId>.cdz (§6.6) — ou, à
 // défaut, GET /card/{id} (§5.5, il renvoie TOUJOURS le fichier) : validation
 // complète (checksum global == cardHash, §6.3), stockage, maj de l'index du
-// nom. Rotation des tokens gérée par le service.
+// nom. Rotation des tokens gérée par le service. Le nom est renommable
+// sur place (✎ — PUT /card/name §5.7, v2 remplace le cache + index).
 type Etat =
   | { phase: 'chargement' }
   | { phase: 'pret'; cdz: Cdz; serveur: { cardpower: number | null; health: number | null; attack: number | null } | null }
@@ -28,6 +30,17 @@ export default function CarteDetail({ carteId }: { carteId: number }) {
   // dans le store au moment de l'appel.
   const { idUser, apiToken } = useAppSelector((etat) => etat.utilisateur);
   const [etat, definirEtat] = useState<Etat>({ phase: 'chargement' });
+
+  // Renommage sur place (§5.7) — exigence produit 2026-11-15 : le nom est
+  // éditable depuis le détail, comme depuis l'éclosion de l'usine. Le serveur
+  // renvoie l'archive mise à jour (sans checksum global) : validation par
+  // extraction interne, remplacement du cache local + index du nom.
+  const [renommage, definirRenommage] = useState<{
+    actif: boolean;
+    nom: string;
+    enCours: boolean;
+    erreur: string | null;
+  }>({ actif: false, nom: '', enCours: false, erreur: null });
 
   const charger = useCallback(async () => {
     definirEtat({ phase: 'chargement' });
@@ -58,7 +71,12 @@ export default function CarteDetail({ carteId }: { carteId: number }) {
         cdz = await ouvrirCdz(octets, serveur.cardHash ?? undefined);
         if (idUser !== null) {
           await enregistrerCarte(idUser, carteId, octets);
-          if (cdz.datas.name) await majIndex(idUser, carteId, cdz.datas.name);
+          if (cdz.datas.name) {
+            await majIndex(idUser, carteId, cdz.datas.name, {
+              id: cdz.datas.seasonid,
+              nom: cdz.datas.saison,
+            });
+          }
         }
         definirEtat({
           phase: 'pret',
@@ -93,6 +111,43 @@ export default function CarteDetail({ carteId }: { carteId: number }) {
     [etat],
   );
 
+  // Envoi du nouveau nom (PUT /card/name §5.7) : archive reçue validée par
+  // extraction interne (ZIP + hashs.json), v2 remplace la v1 du cache local,
+  // index du nom (+ saison, pour la liste des saisons de la maison) mis à
+  // jour, puis l'affichage repart sur la nouvelle archive. La v1 reste en
+  // cache si l'archive reçue est invalide (non-ZIP, tar.xz du bug §5.7).
+  const envoyerRenommage = useCallback(async () => {
+    if (etat.phase !== 'pret' || renommage.enCours) return;
+    const nom = renommage.nom.trim();
+    if (nom.length === 0) return;
+    definirRenommage((actuel) => ({ ...actuel, enCours: true, erreur: null }));
+    try {
+      const renommee = await renommerCarte(carteId, nom);
+      const octets = cdzDepuisBase64(renommee.cardBase64);
+      const cdz = await ouvrirCdz(octets);
+      if (idUser !== null) {
+        await enregistrerCarte(idUser, carteId, octets);
+        await majIndex(idUser, carteId, nom, {
+          id: cdz.datas.seasonid,
+          nom: cdz.datas.saison,
+        });
+      }
+      definirEtat((actuel) =>
+        actuel.phase === 'pret' ? { ...actuel, cdz } : actuel,
+      );
+      definirRenommage({ actif: false, nom: '', enCours: false, erreur: null });
+    } catch (erreur) {
+      const brut = (erreur as Error).message;
+      definirRenommage((actuel) => ({
+        ...actuel,
+        enCours: false,
+        erreur: /non-ZIP|invalide/i.test(brut)
+          ? `Version finale refusée (${brut}) — l'archive d'origine reste en place.`
+          : brut,
+      }));
+    }
+  }, [etat, renommage, carteId, idUser]);
+
   if (etat.phase === 'chargement' || etat.phase === 'erreur' || etat.phase === 'sans-session') {
     const libelle =
       etat.phase === 'sans-session'
@@ -122,10 +177,66 @@ export default function CarteDetail({ carteId }: { carteId: number }) {
     <ScrollView style={styles.plein} contentContainerStyle={styles.contenu}>
       <View style={styles.entete}>
         {imagePerso && <Image source={imagePerso} style={styles.perso} resizeMode="contain" />}
-        <View style={styles.enteteTexte}>
-          <Text style={styles.nom}>{nom}</Text>
-          <Text style={styles.numero}>#{carteId}</Text>
-        </View>
+        {renommage.actif ? (
+          <View style={styles.renommage}>
+            <TextInput
+              style={styles.champNom}
+              value={renommage.nom}
+              onChangeText={(nouveau) =>
+                definirRenommage((actuel) => ({ ...actuel, nom: nouveau }))
+              }
+              placeholder="Nouveau nom"
+              placeholderTextColor="#9ca3af"
+              maxLength={60}
+              autoFocus
+              editable={!renommage.enCours}
+            />
+            {renommage.erreur && <Text style={styles.erreurRenommage}>{renommage.erreur}</Text>}
+            <View style={styles.renommageBoutons}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.bouton,
+                  (renommage.enCours || renommage.nom.trim().length === 0) &&
+                    styles.boutonDesactive,
+                  pressed && styles.boutonAppuye,
+                ]}
+                disabled={renommage.enCours || renommage.nom.trim().length === 0}
+                onPress={envoyerRenommage}
+              >
+                <Text style={styles.boutonTexte}>
+                  {renommage.enCours ? 'Envoi…' : 'Enregistrer'}
+                </Text>
+              </Pressable>
+              <Pressable
+                hitSlop={8}
+                onPress={() =>
+                  definirRenommage({ actif: false, nom: '', enCours: false, erreur: null })
+                }
+                disabled={renommage.enCours}
+              >
+                <Text style={styles.annuler}>Annuler</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.enteteTexte}>
+            <View style={styles.ligneNom}>
+              <Text style={styles.nom} numberOfLines={1}>
+                {nom}
+              </Text>
+              <Pressable
+                hitSlop={8}
+                onPress={() =>
+                  definirRenommage({ actif: true, nom, enCours: false, erreur: null })
+                }
+                accessibilityLabel={`Renommer la carte ${nom}`}
+              >
+                <Text style={styles.crayon}>✎</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.numero}>#{carteId}</Text>
+          </View>
+        )}
       </View>
 
       {/* Visuel 3D : faces front/back de l'archive, rotation par glissement
@@ -140,7 +251,7 @@ export default function CarteDetail({ carteId }: { carteId: number }) {
         <Text style={styles.statLigne}>Attaque&nbsp;: {cdz.datas.attack ?? serveur?.attack ?? '—'}</Text>
         <Text style={styles.statLigne}>Rareté&nbsp;: {cdz.datas.rarity ?? '—'}</Text>
         <Text style={styles.statLigne}>
-          Saison&nbsp;: {cdz.datas.seasonid ?? '—'}
+          Saison&nbsp;: {cdz.datas.saison ?? cdz.datas.seasonid ?? '—'}
         </Text>
       </View>
 
@@ -216,6 +327,47 @@ const styles = StyleSheet.create({
   },
   enteteTexte: {
     flex: 1,
+  },
+  ligneNom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  crayon: {
+    fontSize: 16,
+    color: '#43a047',
+    paddingHorizontal: 4,
+  },
+  renommage: {
+    flex: 1,
+    gap: 8,
+  },
+  champNom: {
+    height: 42,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    fontSize: 15,
+    color: '#1f2937',
+    backgroundColor: '#ffffff',
+  },
+  renommageBoutons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  erreurRenommage: {
+    fontSize: 13,
+    color: '#c62828',
+  },
+  annuler: {
+    fontSize: 14,
+    color: '#6b7280',
+    textDecorationLine: 'underline',
+  },
+  boutonDesactive: {
+    backgroundColor: '#a5d6a7',
   },
   nom: {
     fontSize: 20,

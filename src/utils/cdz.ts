@@ -58,6 +58,11 @@ export type DonneesCarte = {
   health: number | null;
   rarity: number | null;
   power: number | null;
+  // Saison : `seasonid` = univers (entier, absent des archives actuelles) ;
+  // `saison` = nom lisible si le serveur l'écrit dans datas.json — parsing
+  // opportuniste (clés tolérées : « season », « seasonName », « seasonname »),
+  // le client doit accepter les champs additionnels futurs (contrat §6.4).
+  saison: string | null;
   specials: { name: string | null; attack: number | null; health: number | null; turn: number | null }[];
 };
 
@@ -84,6 +89,10 @@ function lireDatas(json: unknown): DonneesCarte {
     health: nombreOuNull(source, 'health'),
     rarity: nombreOuNull(source, 'rarity'),
     power: nombreOuNull(source, 'power'),
+    saison:
+      texteOuNull(source, 'season') ??
+      texteOuNull(source, 'seasonName') ??
+      texteOuNull(source, 'seasonname'),
     specials: specials.map((special) => ({
       name: texteOuNull(special, 'name'),
       attack: nombreOuNull(special, 'attack'),

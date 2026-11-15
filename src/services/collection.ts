@@ -9,11 +9,20 @@ import { Platform } from 'react-native';
 //  - web : IndexedDB custom (expo-file-system est natif-only, cf. son module
 //    web : « not supported on web ») — base `codebara-cdz`, origin-privée.
 //
-// Index léger (id → nom) à côté des archives : la liste GET /card (§5.4) ne
-// porte PAS le nom des cartes, il vit dans datas.json du .cdz — lire chaque
-// archive zippée pour l'affichage de la liste serait trop lourd.
+// Index léger (id → nom + saison) à côté des archives : la liste GET /card
+// (§5.4) ne porte PAS le nom des cartes, il vit dans datas.json du .cdz — lire
+// chaque archive zippée pour l'affichage de la liste serait trop lourd. La
+// saison (id + nom opportun, cf. cdz.ts) y est aussi portée : la maison
+// construit sa liste locale de saisons disponible pour l'utilisateur à partir
+// de cet index (mis à jour à chaque génération / renommage / détail chargé).
 
-export type EntreeIndex = { nom: string };
+export type EntreeIndex = {
+  nom: string;
+  /** Identifiant d'univers (datas.seasonid), null si l'archive n'en porte pas. */
+  saisonId?: number | null;
+  /** Nom de saison lu dans datas.json (clé opportuniste), null si absent. */
+  saison?: string | null;
+};
 
 export async function lireIndex(idUser: number): Promise<Record<string, EntreeIndex>> {
   if (Platform.OS === 'web') {
@@ -30,14 +39,19 @@ export async function lireIndex(idUser: number): Promise<Record<string, EntreeIn
   }
 }
 
-// Fusionne (ou met à jour) une entrée du nom d'une carte — appelée après un
-// renommage §5.7 réussi, ou quand datas.json révèle un nom au détail.
+// Fusionne (ou met à jour) une entrée d'une carte — appelée après un
+// renommage §5.7 réussi, une génération (§6.1), ou quand datas.json révèle
+// un nom au détail. La saison connue (id + nom lu dans datas.json) accompagne
+// le nom pour alimenter la liste locale des saisons de la maison.
 export async function majIndex(
   idUser: number,
   carteId: number,
   nom: string,
+  saison?: { id: number | null; nom: string | null },
 ): Promise<void> {
-  const entier = { [String(carteId)]: { nom } };
+  const entier: Record<string, EntreeIndex> = saison
+    ? { [String(carteId)]: { nom, saisonId: saison.id, saison: saison.nom } }
+    : { [String(carteId)]: { nom } };
   const actuel = await lireIndex(idUser);
   const fusion = { ...actuel, ...entier };
   if (Platform.OS === 'web') {

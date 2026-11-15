@@ -13,12 +13,16 @@ Scanner de codes-barres produits (EAN-8, EAN-13, UPC-A, UPC-E via caméra ; + UP
 - `CameraView` plein écran, scanneur restreint aux 4 types ; panneau blanc en bas : astuce, dernier scan (format + badge valide/invalide + chiffres).
 - Sous le chiffre : bouton vert **« Fabriquer la carte »** (désactivé si code invalide, sans session, popup déjà ouverte) + note grise « Sans session serveur, la fabrication est indisponible. » ; message d'état (vert/rouge) dans le panneau.
 
-### Web — saisie
+### Web — saisie + scan caméra (@zxing/browser)
 
 - Titre, aide formats, champ numérique, libellé live, bouton **« Fabriquer la carte »** (désactivé tant que non valide ou sans session), message d'état.
+- **Scan caméra** (exigence 2026-11-15, web uniquement, moteur `@zxing/browser` 0.2 + `@zxing/library`) : le bouton bleu **« Scanner avec la caméra »** n'apparaît que si un périphérique caméra est détecté (`navigator.mediaDevices` + `enumerateDevices` — une liste vide laisse le bouton, le démarrage affichera l'erreur). Appui : élément `<video>` créé par le DOM et inséré dans la View d'aperçu (300×200, liseré vert quand actif) — `BrowserMultiFormatReader` avec hints EAN-8/EAN-13/UPC-A/UPC-E, caméra **arrière** (`facingMode: 'environment'`). Le callback alimente le champ de saisie (même pipeline que la saisie manuelle : format + clé de contrôle) ; **anti-rafale 2,5 s** sur un même code ; frames sans code ignorées. Appui suivant : « Arrêter la caméra » (flux coupé, vidéo retirée) ; arrêt aussi au démontage.
+- Erreurs caméra (rouge) : « Accès refusé » / « Aucune caméra détectée » / message brut ; la saisie manuelle reste utilisable.
+- iOS/Android : restent sur `usine-ecran.tsx` (expo-camera) — `@zxing/browser` n'est embarqué que par la variante web.
 
 ### Popup « fabrication » (Modal, partagée natif/web)
 
+- Après `PUT /card/name` réussi : **redirection du joueur vers la fenêtre détail de la carte** (exigence 2026-11-15 — cf. Navigation).
 - **Génération** : spinner vert + « Génération en cours — … jusqu'à 2 minutes » (fermeture non proposée pendant l'attente).
 - **Éclosion** : titre « Éclosion — carte #id », **visuel 3D en vitrine de musée pleine largeur** (`visuel-carte.tsx`, carte 220 px — recto `front.png` par défaut, verso `back.png` passé 90° ; 360° horizontal, ±30° vertical avec reflets de lumière ; pupitre + spot + fond lointain en parallaxe), champ « Nom de la carte » (placeholder « Obligatoire », 60 car. max), bouton « Envoyer le nom » (désactivé si vide ou en envoi — libellé « Envoi… »).
 - **Sans fichier** (réponse asynchrone §5.3 à venir) : « Carte #id créée — apparaîtra dans la maison une fois finalisée » + « Compris ».
@@ -28,7 +32,8 @@ Scanner de codes-barres produits (EAN-8, EAN-13, UPC-A, UPC-E via caméra ; + UP
 
 - **Scanner** : permission caméra (une demande auto / anti-rafale 2,5 s, cf. notes) ; `fabrication` (code soumis + popup ouverte), `message` parent.
 - **Popup — recette §6.1** : `POST /card` → base64 → octets → `sha256(bytes) == checksum` ; extraction ZIP + `hashs.json` internes ; **écart → re-téléchargement unique `GET /card/{id}`** puis re-validation ; **stockage immédiat de la v1** `<idUser>/<cardid>.cdz` ; puis popup éclosion.
-- **Renommage** : `PUT /card/name {cid, name}` → réponse `{cid, card}` SANS checksum → validation par extraction interne (signature ZIP + hashs.json) → **v2 remplace la v1** + index nom (`majIndex`). **ZIP uniquement** : une archive non-ZIP (bug serveur tar.xz §5.7, décision produit 2026-11-03) est refusée avec un message « la version d'origine reste dans la collection » — la v1 stockée fait foi.
+- **Renommage** : `PUT /card/name {cid, name}` → réponse `{cid, card}` SANS checksum → validation par extraction interne (signature ZIP + hashs.json) → **v2 remplace la v1** + index nom + saison (`majIndex`). **ZIP uniquement** : une archive non-ZIP (bug serveur tar.xz §5.7, décision produit 2026-11-03) est refusée avec un message « la version d'origine reste dans la collection » — la v1 stockée fait foi.
+- **Redirection post-enregistrement** (exigence 2026-11-15) : après un renommage réussi, `naviguer({ nom: 'carte', carteId })` — la popup se ferme et le détail de la carte (celui ouvert par un clic dans la maison) s'empile au-dessus de l'usine, natif comme web.
 - Étapes internes : `generer` / `eclosion` / `sans-fichier` / `erreur` ; garde-fous anti setState après démontage.
 - Succession serveur inactif (§9.2) : 400 « Invalid Request with body… » → message dédié « Génération indisponible… » (jamais de déconnexion — le token reste bon).
 - Timeout `POST /card` : **150 s** (génération IA synchrone 10 s à 2 min, contrat §5.3) ; autres routes 10 s.
@@ -36,7 +41,7 @@ Scanner de codes-barres produits (EAN-8, EAN-13, UPC-A, UPC-E via caméra ; + UP
 ## Navigation
 
 - Entrée : tap la zone usine sur la carte (fenêtre principale).
-- Sortie : bouton retour de la barre d'en-tête maison → `retourner()` (dépile vers la fenêtre principale) ; la fermeture de la popup ne quitte pas la fenêtre.
+- Sortie : bouton retour de la barre d'en-tête maison → `retourner()` (dépile vers la fenêtre principale) ; la fermeture de la popup ne quitte pas la fenêtre. Après un enregistrement de nom réussi, la pile empile le **détail carte** (retour = retour à l'usine).
 
 ## Notes
 

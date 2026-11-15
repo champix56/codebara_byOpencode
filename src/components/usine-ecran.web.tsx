@@ -1,17 +1,151 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
+import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import { detecterFormat, neRetenirQueChiffres } from '../utils/codes-bar';
+import { naviguer } from '../navigation/navigateur';
 import { useAppSelector } from '../store/hooks';
 import FabricationCarte from './fabrication-carte';
 
-// Fenêtre usine côté web : la caméra du module expo-camera n'y fonctionne pas
-// (code natif), la saisie manuelle d'un code-barres la remplace. Le format est
-// détecté à la volée par la longueur — EAN-8, EAN-13, UPC-A, UPC-E et UPC-B.
+// Fenêtre usine côté web : le module expo-camera (code natif) n'y fonctionne
+// pas — le scan CAMÉRA est assuré par @zxing/browser (décodage pur JS sur le
+// flux getUserMedia, caméra arrière via facingMode 'environment'), limité aux
+// formats produits gérés par la validation (EAN-8, EAN-13, UPC-A, UPC-E).
+// La saisie manuelle reste possible ; si aucun périphérique caméra n'est
+// détecté, le bouton de scan disparaît. iOS/Android restent sur usine-ecran.tsx
+// (expo-camera).
+//
+// Exigence produit 2026-11-15 : après l'enregistrement du nom d'une carte
+// fabriquée, redirection vers sa fenêtre détail (comme un clic dans la maison).
+
+// Un même code relu en rafale est ignoré pendant ce délai (une lecture = une
+// action) — même règle que le scanneur natif.
+const DELAI_MEME_CODE_MS = 2500;
+
+// Formats produits attendus (symbologies ZXing équivalentes aux TYPES_CIBLES
+// du scanneur natif ; l'UPC-B 11 chiffres reste réservé à la saisie manuelle).
+const FORMATS_CIBLES = [
+  BarcodeFormat.EAN_8,
+  BarcodeFormat.EAN_13,
+  BarcodeFormat.UPC_A,
+  BarcodeFormat.UPC_E,
+];
+
 export default function UsineEcranWeb() {
   const [saisie, setSaisie] = useState('');
   const [codeSoumis, setCodeSoumis] = useState<string | null>(null);
   const [message, setMessage] = useState<{ texte: string; erreur: boolean } | null>(null);
   const sessionActive = useAppSelector((etat) => etat.utilisateur.apiToken !== null);
+
+  // Caméra : détection opportuniste (navigator.mediaDevices) — null tant que
+  // la liste des périphériques n'est pas revenue ; false = bouton masqué.
+  const [cameraDisponible, definirCameraDisponible] = useState<boolean | null>(null);
+  const [scanActif, definirScanActif] = useState(false);
+
+  // Éléments DOM du lecteur ZXing (pur navigateur — RN web les insère dans la
+  // View de rendu via ref) ; les refs survivent aux re-rendus du geste.
+  const conteneurVideoRef = useRef<HTMLElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const controlesRef = useRef<IScannerControls | null>(null);
+  const memoireScan = useRef<{ code: string; depuis: number }>({ code: '', depuis: 0 });
+
+  // Détection des caméras au montage : liste des périphériques vidéo. Une
+  // liste vide (certains navigateurs la masquent avant permission) laisse le
+  // bouton visible — le démarrage affichera alors l'erreur adéquate.
+  useEffect(() => {
+    let annule = false;
+    (async () => {
+      if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+        definirCameraDisponible(false);
+        return;
+      }
+      try {
+        const appareils = await navigator.mediaDevices.enumerateDevices();
+        if (annule) return;
+        definirCameraDisponible(
+          appareils.length === 0 || appareils.some((appareil) => appareil.kind === 'videoinput'),
+        );
+      } catch {
+        if (!annule) definirCameraDisponible(true); // indéterminé → tenter quand même
+      }
+    })();
+    return () => {
+      annule = true;
+    };
+  }, []);
+
+  // Arrêt propre du lecteur au démontage (coupe le flux caméra).
+  useEffect(
+    () => () => {
+      controlesRef.current?.stop();
+      controlesRef.current = null;
+      videoRef.current?.remove();
+      videoRef.current = null;
+    },
+    [],
+  );
+
+  const arreterScan = () => {
+    controlesRef.current?.stop();
+    controlesRef.current = null;
+    videoRef.current?.remove();
+    videoRef.current = null;
+    definirScanActif(false);
+  };
+
+  // Démarre le lecteur ZXing sur la caméra arrière : le callback alimente le
+  // champ de saisie (même pipeline que la saisie manuelle : détection de
+  // format + clé de contrôle). Les frames sans code (NotFoundException
+  // continue) sont ignorées ; un même code est anti-rebondu 2,5 s.
+  const demarrerScan = async () => {
+    setMessage(null);
+    arreterScan();
+    const conteneur = conteneurVideoRef.current;
+    if (!conteneur) return;
+    const video = document.createElement('video');
+    video.setAttribute('playsinline', 'true'); // lecture inline (iOS)
+    video.muted = true;
+    video.style.width = '100%';
+    video.style.height = '100%';
+    video.style.objectFit = 'cover';
+    videoRef.current = video;
+    conteneur.appendChild(video);
+
+    const indications = new Map();
+    indications.set(DecodeHintType.POSSIBLE_FORMATS, FORMATS_CIBLES);
+    const lecteur = new BrowserMultiFormatReader(indications);
+    try {
+      const controles = await lecteur.decodeFromVideoDevice(undefined, video, (resultat) => {
+        if (!resultat) return;
+        const chiffres = neRetenirQueChiffres(resultat.getText() ?? '');
+        if (!chiffres) return;
+        const maintenant = Date.now();
+        if (
+          memoireScan.current.code === chiffres &&
+          maintenant - memoireScan.current.depuis < DELAI_MEME_CODE_MS
+        ) {
+          return;
+        }
+        memoireScan.current = { code: chiffres, depuis: maintenant };
+        setSaisie(chiffres);
+        setCodeSoumis(null);
+      });
+      controlesRef.current = controles;
+      definirScanActif(true);
+    } catch (erreur) {
+      arreterScan();
+      const nom = (erreur as { name?: string }).name ?? '';
+      setMessage({
+        texte:
+          nom === 'NotAllowedError'
+            ? 'Accès à la caméra refusé — autorise-la dans ton navigateur.'
+            : nom === 'NotFoundError' || nom === 'OverconstrainedError'
+              ? 'Aucune caméra détectée sur cet appareil.'
+              : `Caméra indisponible : ${(erreur as Error).message}`,
+        erreur: true,
+      });
+    }
+  };
 
   const chiffres = neRetenirQueChiffres(saisie);
   const detection = detecterFormat(chiffres);
@@ -42,7 +176,6 @@ export default function UsineEcranWeb() {
           placeholderTextColor="#9aa3ab"
           keyboardType="numeric"
           maxLength={13}
-          autoFocus
         />
 
         {chiffres.length > 0 && (
@@ -54,6 +187,31 @@ export default function UsineEcranWeb() {
           >
             {detection.libelle}
           </Text>
+        )}
+
+        {/* Caméra (web) : aperçu du lecteur ZXing + démarrage / arrêt. Le
+            conteneur reçoit l'élément <video> natif du navigateur (la View web
+            est un <div>, la ref pointe dessus). */}
+        {cameraDisponible && (
+          <View style={styles.blocCamera}>
+            <View
+              ref={(element) => {
+                conteneurVideoRef.current = element as HTMLElement | null;
+              }}
+              style={[styles.vision, scanActif && styles.visionActive]}
+            />
+            <Pressable
+              style={({ pressed }) => [styles.boutonScan, pressed && styles.boutonAppuye]}
+              onPress={scanActif ? arreterScan : demarrerScan}
+            >
+              <Text style={styles.boutonScanTexte}>
+                {scanActif ? 'Arrêter la caméra' : 'Scanner avec la caméra'}
+              </Text>
+            </Pressable>
+            {scanActif && (
+              <Text style={styles.astuce}>Vise un code-barres EAN-8, EAN-13, UPC-A ou UPC-E</Text>
+            )}
+          </View>
         )}
 
         <Pressable
@@ -80,12 +238,10 @@ export default function UsineEcranWeb() {
       <FabricationCarte
         chiffres={codeSoumis}
         surFermer={() => setCodeSoumis(null)}
-        surEnregistree={(carteId, nom) =>
-          setMessage({
-            texte: `Carte #${carteId} « ${nom} » enregistrée — vois-la dans la maison.`,
-            erreur: false,
-          })
-        }
+        // Enregistrement réussi (nom + archive v2) : redirection vers la
+        // fenêtre détail de la carte (exigence produit 2026-11-15) — la popup
+        // se ferme et la pile empile le détail au-dessus de l'usine.
+        surEnregistree={(carteId) => naviguer({ nom: 'carte', carteId })}
       />
     </KeyboardAvoidingView>
   );
@@ -137,11 +293,45 @@ const styles = StyleSheet.create({
   formatInvalide: {
     color: '#c62828',
   },
+  blocCamera: {
+    alignItems: 'center',
+    gap: 10,
+  },
+  vision: {
+    width: 300,
+    height: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#111827',
+  },
+  visionActive: {
+    borderColor: '#43a047',
+    borderWidth: 2,
+  },
+  boutonScan: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    backgroundColor: '#1976d2',
+  },
+  boutonScanTexte: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  astuce: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
   bouton: {
     paddingVertical: 12,
     paddingHorizontal: 28,
     borderRadius: 10,
     backgroundColor: '#43a047',
+  },
+  boutonAppuye: {
+    opacity: 0.85,
   },
   boutonDesactive: {
     backgroundColor: '#e5e7eb',

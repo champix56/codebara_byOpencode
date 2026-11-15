@@ -3,6 +3,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import type { FormatCode } from '../utils/codes-bar';
 import { LIBELLE_FORMAT, detecterFormat, neRetenirQueChiffres, verifierCode } from '../utils/codes-bar';
+import { naviguer } from '../navigation/navigateur';
 import { useAppSelector } from '../store/hooks';
 import FabricationCarte from './fabrication-carte';
 
@@ -23,7 +24,6 @@ export default function UsineEcran() {
   const [permission, demanderPermission] = useCameraPermissions();
   const [dernierScan, setDernierScan] = useState<Scan | null>(null);
   const [fabrication, definirFabrication] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ texte: string; erreur: boolean } | null>(null);
   const apiToken = useAppSelector((etat) => etat.utilisateur.apiToken);
   const sessionActive = apiToken !== null;
 
@@ -52,9 +52,6 @@ export default function UsineEcran() {
       return;
     }
     memoireScan.current = { code: chiffres, depuis: maintenant };
-
-    // Un nouveau scan hors fabrication invalide le message précédent.
-    if (fabrication === null) setMessage(null);
 
     // Le type de la caméra fait foi — il lève l'ambiguïté EAN-8 / UPC-E ; sinon
     // (type inattendu) on retombe sur la détection par longueur.
@@ -149,23 +146,15 @@ export default function UsineEcran() {
             )}
           </>
         )}
-
-        {message && (
-          <Text style={message.erreur ? styles.erreur : styles.messageSucces}>
-            {message.texte}
-          </Text>
-        )}
       </View>
 
       <FabricationCarte
         chiffres={fabrication}
         surFermer={() => definirFabrication(null)}
-        surEnregistree={(carteId, nom) =>
-          setMessage({
-            texte: `Carte #${carteId} « ${nom} » enregistrée — vois-la dans la maison.`,
-            erreur: false,
-          })
-        }
+        // Enregistrement réussi (nom + archive v2) : redirection vers la
+        // fenêtre détail de la carte (exigence produit 2026-11-15) — la popup
+        // se ferme et la pile empile le détail au-dessus de l'usine.
+        surEnregistree={(carteId) => naviguer({ nom: 'carte', carteId })}
       />
     </View>
   );
@@ -281,17 +270,6 @@ const styles = StyleSheet.create({
   sansSession: {
     fontSize: 12,
     color: '#9ca3af',
-    textAlign: 'center',
-  },
-  messageSucces: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#2e7d32',
-    textAlign: 'center',
-  },
-  erreur: {
-    fontSize: 13,
-    color: '#c62828',
     textAlign: 'center',
   },
 });

@@ -22,7 +22,8 @@ import { type Cdz } from '../utils/cdz';
 // Deux faces : front.png (recto, présenté par défaut) et back.png (verso, du
 // même fichier .cdz) — glisser HORIZONTALEMENT tourne la carte (360° libres),
 // passé 90° le dos apparaît ; glisser VERTICALEMENT incline la carte (±30°)
-// pour faire apparaître les reflets de lumière. Pointeur (web) ou doigt
+// pour faire apparaître les reflets de lumière ; pincer à DEUX DOIGTS
+// (écarter/resserrer) zoome la carte (×0,5 à ×3). Pointeur (web) ou doigt
 // (natif) — même système répondeur React Native, posé sur toute la vitrine.
 //
 // Tout est du pur React Native (triangle du faisceau par bordures, bandes
@@ -43,17 +44,31 @@ const SENSIBILITE_HORIZONTALE = 0.55;
 const SENSIBILITE_VERTICALE = 0.35;
 
 // Pose de la carte : angles courants + pose figée à la capture du geste
-// (les deltas de PanResponder sont cumulatifs depuis la capture).
+// (les deltas de PanResponder sont cumulatifs depuis la capture). Le zoom est
+// piloté à DEUX doigts (écartement/resserrement, exigence produit 2026-11-15)
+// : `depart.ecart` fige la distance entre les deux doigts à l'entrée du geste
+// pincé — le zoom suit le rapport écart courant / écart de référence.
 type Pose = {
   rotationY: number;
   inclinaison: number;
-  depart: { rotationY: number; inclinaison: number };
+  zoom: number;
+  depart: {
+    rotationY: number;
+    inclinaison: number;
+    zoom: number;
+    /** Distance (px) entre les deux doigts à l'entrée du mode pincé. */
+    ecart: number | null;
+  };
 };
+
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 3;
 
 const POSE_INITIALE: Pose = {
   rotationY: 0,
   inclinaison: 0,
-  depart: { rotationY: 0, inclinaison: 0 },
+  zoom: 1,
+  depart: { rotationY: 0, inclinaison: 0, zoom: 1, ecart: null },
 };
 
 const borne = (valeur: number, min: number, max: number): number =>
@@ -98,22 +113,65 @@ export default function VisuelCarte({ cdz, largeur }: Props) {
         onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
           // Pose de référence du geste : dx/dy de PanResponder sont cumulatifs
-          // DEPUIS la capture, les rotations s'y ajoutent.
+          // DEPUIS la capture, les rotations s'y ajoutent ; l'écart pincé est
+          // réarmé (un doigt = rotation, deux doigts = zoom).
           definirPose((actuelle) => ({
             ...actuelle,
-            depart: { rotationY: actuelle.rotationY, inclinaison: actuelle.inclinaison },
+            depart: {
+              rotationY: actuelle.rotationY,
+              inclinaison: actuelle.inclinaison,
+              zoom: actuelle.zoom,
+              ecart: null,
+            },
           }));
         },
-        onPanResponderMove: (_evt, geste) => {
-          definirPose((actuelle) => ({
-            ...actuelle,
-            rotationY: actuelle.depart.rotationY + geste.dx * SENSIBILITE_HORIZONTALE,
-            inclinaison: borne(
-              actuelle.depart.inclinaison - geste.dy * SENSIBILITE_VERTICALE,
-              -INCLINAISON_MAX,
-              INCLINAISON_MAX,
-            ),
-          }));
+        onPanResponderMove: (evenement, geste) => {
+          // Deux doigts posés = mode zoom : la distance entre les deux
+          // touches (nativeEvent.touches) pilote l'échelle, la rotation est
+          // figée.
+          const touches = evenement.nativeEvent.touches;
+          if (geste.numberActiveTouches >= 2 && touches.length >= 2) {
+            const [un, deux] = touches;
+            const ecart = Math.hypot(un.pageX - deux.pageX, un.pageY - deux.pageY);
+            definirPose((actuelle) => {
+              // Premier mouvement à deux doigts : pose de référence (écart +
+              // zoom du moment) ; les suivants appliquent le rapport.
+              const ecartRef = actuelle.depart.ecart ?? ecart;
+              const zoomRef = actuelle.depart.ecart === null ? actuelle.zoom : actuelle.depart.zoom;
+              return {
+                ...actuelle,
+                depart: { ...actuelle.depart, zoom: zoomRef, ecart: ecartRef },
+                zoom: borne((zoomRef * ecart) / ecartRef, ZOOM_MIN, ZOOM_MAX),
+              };
+            });
+            return;
+          }
+          // Un seul doigt : rotation (horizontale) + inclinaison (verticale).
+          // Sortie du mode zoom : la référence de rotation est re-figée sur la
+          // pose courante (le dx cumulatif du pincement ne doit pas faire
+          // tourner la carte d'un coup).
+          definirPose((actuelle) => {
+            if (actuelle.depart.ecart !== null) {
+              return {
+                ...actuelle,
+                depart: {
+                  rotationY: actuelle.rotationY,
+                  inclinaison: actuelle.inclinaison,
+                  zoom: actuelle.zoom,
+                  ecart: null,
+                },
+              };
+            }
+            return {
+              ...actuelle,
+              rotationY: actuelle.depart.rotationY + geste.dx * SENSIBILITE_HORIZONTALE,
+              inclinaison: borne(
+                actuelle.depart.inclinaison - geste.dy * SENSIBILITE_VERTICALE,
+                -INCLINAISON_MAX,
+                INCLINAISON_MAX,
+              ),
+            };
+          });
         },
       }),
     [],
@@ -294,6 +352,7 @@ export default function VisuelCarte({ cdz, largeur }: Props) {
             top: margeHaut,
             transform: [
               { perspective: PERSPECTIVE },
+              { scale: pose.zoom },
               { rotateX: `${pose.inclinaison}deg` },
               { rotateY: `${pose.rotationY}deg` },
             ],

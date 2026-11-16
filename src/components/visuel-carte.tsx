@@ -2,13 +2,12 @@ import { useMemo, useState } from 'react';
 import {
   Image,
   PanResponder,
-  Platform,
   StyleSheet,
   View,
-  type ViewStyle,
 } from 'react-native';
 import { encoderBase64 } from '../utils/base64';
 import { type Cdz } from '../utils/cdz';
+import IncrustationNomCarte from './incrustation-nom-carte';
 
 // Visuel 3D d'une carte extraite d'une archive .cdz (contrat §6.2) — mise en
 // scène « vitrine de musée » : la vitrine occupe TOUTE la largeur du parent,
@@ -25,6 +24,9 @@ import { type Cdz } from '../utils/cdz';
 // pour faire apparaître les reflets de lumière ; pincer à DEUX DOIGTS
 // (écarter/resserrer) zoome la carte (×0,5 à ×3). Pointeur (web) ou doigt
 // (natif) — même système répondeur React Native, posé sur toute la vitrine.
+//
+// Le dos n'utilise NI backfaceVisibility NI rotation imbriquée (correctif
+// 2026-11-16, cf. culling plus bas) : une seule face, l'image bascule.
 //
 // Tout est du pur React Native (triangle du faisceau par bordures, bandes
 // translucides) : aucune dépendance native — web, iOS et Android.
@@ -85,14 +87,14 @@ const PLEIN = {
   bottom: 0,
 };
 
-// Profondeur 3D réelle (web uniquement) : sans `transform-style: preserve-3d`,
-// le navigateur aplatit la composition parent (rotateY du recto) + enfant
-// (rotateY 180 du dos) — le dos apparaît alors en MIROIR passé 90°. En natif,
-// le modèle de calques compose déjà correctement (motif flip-card standard)
-// et la propriété n'existe pas dans les types — d'où le cast, web seul.
-const PROFONDEUR_WEB = (
-  Platform.OS === 'web' ? { transformStyle: 'preserve-3d' as const } : {}
-) as ViewStyle;
+// Profondeur 3D réelle — PLUS UTILISÉE : l'approche face unique (culling par
+// l'angle effectif, correctif 2026-11-16) ne compose plus de rotations
+// imbriquées, donc le navigateur ne peut plus aplatir/miroiter. Historique :
+// le modèle flip-card (deux faces empilées, dos en rotateY 180 +
+// backfaceVisibility) ne s'affichait PAS sur Android/iOS — Android cesse de
+// rendre les enfants d'un pivot 3D composé au-delà de 90°, et
+// backfaceVisibility échoue dans cette composition (perspective + scale +
+// inclinaison + overflow hidden).
 
 export default function VisuelCarte({ cdz, largeur }: Props) {
   // Rotation horizontale cumulée (non bornée : plusieurs tours possibles) et
@@ -185,6 +187,26 @@ export default function VisuelCarte({ cdz, largeur }: Props) {
     () => `data:image/png;base64,${encoderBase64(cdz.back)}`,
     [cdz.back],
   );
+
+  // ── Face affichée + angle effectif (correctif 2026-11-16) ───────────────────
+  // `backfaceVisibility` natif n'est pas fiable dans cette composition
+  // (Android cesse de rendre les ENFANTS d'un pivot 3D composé au-delà de
+  // 90° — le dos ne s'affichait jamais ; l'élimination par opacité des faces
+  // n'a pas suffi). Approche sans aucune rotation imbriquée :
+  //   - UNE seule face ; passé 90° (cos < 0) l'image bascule sur back.png ;
+  //   - le pivot tourne sur l'ANGLE EFFECTIF θ' = θ ou θ+180 : ramené dans la
+  //     bande (-90°, +90°), la carte est toujours face au spectateur — aucune
+  //     face arrière à rendre. Le basculement est invisible : à 90° la carte
+  //     est de profil (largeur projetée |cos θ| continue de part et d'autre).
+  //   - back.png apparaît NON MIROIR (il est vu de face, comme front.png).
+  const rectoVisible = Math.cos((pose.rotationY * Math.PI) / 180) > 0;
+  const rotationEffective = pose.rotationY + (rectoVisible ? 0 : 180);
+
+  // Nom incrusté sur le recto (datas.json + position deck.json) — même
+  // repli que le détail : « Carte #id » si le nom est vide.
+  const nomAffiche =
+    (cdz.datas.name && cdz.datas.name.length > 0 ? cdz.datas.name : null) ??
+    (cdz.datas.id !== null ? `Carte #${cdz.datas.id}` : null);
 
   // ── Géométrie de la vitrine (tout dérive de la largeur de la carte) ──────
   // La vitrine occupe toute la largeur du parent ; les éléments centrés sont
@@ -337,13 +359,13 @@ export default function VisuelCarte({ cdz, largeur }: Props) {
       />
 
       {/* Carte pivotante : la perspective est en tête de la même chaîne de
-          transformations (le rendu 3D s'applique aux rotations de CET élément ;
-          la face arrière, plane, bascule par rotateY(180) + backfaceVisibility,
-          et preserve-3d (web) compose les deux rotations en vraie 3D). */}
+          transformations ; l'angle effectif reste dans la bande face au
+          spectateur et l'image bascule front/back — AUCUNE rotation imbriquée
+          (Android ne rend pas les enfants d'un pivot 3D composé au-delà de
+          90°, cf. commentaire du culling). */}
       <View
         style={[
           styles.pivot,
-          PROFONDEUR_WEB,
           {
             width: largeur,
             height: hauteur,
@@ -354,17 +376,28 @@ export default function VisuelCarte({ cdz, largeur }: Props) {
               { perspective: PERSPECTIVE },
               { scale: pose.zoom },
               { rotateX: `${pose.inclinaison}deg` },
-              { rotateY: `${pose.rotationY}deg` },
+              { rotateY: `${rotationEffective}deg` },
             ],
           },
         ]}
       >
         <View style={styles.face}>
-          <Image source={{ uri: faceFront }} style={styles.image} resizeMode="contain" />
-          <Reflet rotationY={pose.rotationY} inclinaison={pose.inclinaison} />
-        </View>
-        <View style={[styles.face, styles.faceDos, { transform: [{ rotateY: '180deg' }] }]}>
-          <Image source={{ uri: faceDos }} style={styles.image} resizeMode="contain" />
+          <Image
+            source={{ uri: rectoVisible ? faceFront : faceDos }}
+            style={styles.image}
+            resizeMode="contain"
+          />
+          {/* Nom incrusté (deck.json positions.name) — sur le recto UNIQUEMENT
+              (il tourne avec la carte ; le dos ne porte pas de nom). */}
+          {rectoVisible && (
+            <IncrustationNomCarte
+              position={cdz.deck?.nom ?? null}
+              repere={cdz.deck?.repere ?? 600}
+              hauteurRepere={cdz.deck?.hauteurRepere ?? 1037}
+              nom={nomAffiche}
+              largeurCarte={largeur}
+            />
+          )}
           <Reflet rotationY={pose.rotationY} inclinaison={pose.inclinaison} />
         </View>
       </View>
@@ -510,12 +543,10 @@ const styles = StyleSheet.create({
     ...PLEIN,
     borderRadius: 12,
     overflow: 'hidden',
-    backfaceVisibility: 'hidden',
     backgroundColor: '#ffffff',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e5e7eb',
   },
-  faceDos: {},
   image: {
     ...PLEIN,
   },

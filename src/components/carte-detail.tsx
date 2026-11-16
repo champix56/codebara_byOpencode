@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import {
   ErreurApi,
   renommerCarte,
@@ -29,6 +38,20 @@ export default function CarteDetail({ carteId }: { carteId: number }) {
   // repartait en boucle ou en double requête. Le service lit le token vivant
   // dans le store au moment de l'appel.
   const { idUser, apiToken } = useAppSelector((etat) => etat.utilisateur);
+  // Taille du visuel 3D (exigence produit 2026-11-15) : le détail doit tenir
+  // DANS l'écran sur mobile — perso en haut, visuel, specs. La vitrine 3D fait
+  // ~2,5× la largeur de la carte en hauteur : bornée par la largeur de l'écran
+  // ET par un budget vertical (~45 % de la hauteur), plancher à 120 px.
+  // (Hook en tête : les phases chargement/erreur retournent plus tôt.)
+  const dimensions = useWindowDimensions();
+  const largeurVisuel = Math.max(
+    120,
+    Math.min(
+      200,
+      Math.round(dimensions.width * 0.42),
+      Math.round((dimensions.height * 0.45) / 2.5),
+    ),
+  );
   const [etat, definirEtat] = useState<Etat>({ phase: 'chargement' });
 
   // Renommage sur place (§5.7) — exigence produit 2026-11-15 : le nom est
@@ -175,6 +198,7 @@ export default function CarteDetail({ carteId }: { carteId: number }) {
 
   return (
     <ScrollView style={styles.plein} contentContainerStyle={styles.contenu}>
+      {/* Perso de la carte en tête de fenêtre, centré. */}
       <View style={styles.entete}>
         {imagePerso && <Image source={imagePerso} style={styles.perso} resizeMode="contain" />}
         {renommage.actif ? (
@@ -239,9 +263,9 @@ export default function CarteDetail({ carteId }: { carteId: number }) {
         )}
       </View>
 
-      {/* Visuel 3D : faces front/back de l'archive, rotation par glissement
-          (360° horizontal, ±30° vertical pour les reflets de lumière). */}
-      <VisuelCarte cdz={cdz} largeur={300} />
+      {/* Visuel 3D compact : faces front/back de l'archive, rotation par
+          glissement (360° horizontal, ±30° vertical pour les reflets). */}
+      <VisuelCarte cdz={cdz} largeur={largeurVisuel} />
 
       <View style={styles.stats}>
         <Text style={styles.statLigne}>
@@ -276,8 +300,9 @@ const styles = StyleSheet.create({
   },
   contenu: {
     alignItems: 'center',
-    padding: 24,
-    paddingBottom: 40,
+    padding: 16,
+    paddingBottom: 32,
+    gap: 12,
   },
   centre: {
     flex: 1,
@@ -313,20 +338,18 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   entete: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     width: '100%',
-    maxWidth: 360,
   },
   perso: {
-    width: 64,
-    height: 64,
-    borderRadius: 12,
+    width: 72,
+    height: 72,
+    borderRadius: 14,
     backgroundColor: '#f3f4f6',
   },
   enteteTexte: {
-    flex: 1,
+    alignItems: 'center',
   },
   ligneNom: {
     flexDirection: 'row',
@@ -339,7 +362,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   renommage: {
-    flex: 1,
+    width: '100%',
     gap: 8,
   },
   champNom: {
@@ -355,6 +378,7 @@ const styles = StyleSheet.create({
   renommageBoutons: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 14,
   },
   erreurRenommage: {
@@ -379,16 +403,18 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
   },
   stats: {
-    marginTop: 18,
+    marginTop: 4,
     gap: 4,
+    alignItems: 'center',
   },
   statLigne: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#374151',
   },
   specials: {
-    marginTop: 16,
+    marginTop: 8,
     gap: 6,
+    alignItems: 'center',
   },
   titreSpecials: {
     fontSize: 14,

@@ -14,6 +14,7 @@ Vue d'ensemble — chaque logique détaillée vit dans son propre fichier (voir
 | jszip | 3.10.2 | Lecture des archives `.cdz` (ZIP §5.3) — caractères pure JS |
 | expo-file-system | ~58 | Cache collection `<idUser>/<id>.cdz` (§6.6, natif ; web → IndexedDB custom) |
 | @zxing/browser + @zxing/library | 0.2.1 / 0.23.0 | **Web uniquement** — scan caméra de codes-barres à l'usine (natif reste sur expo-camera) |
+| `NOTES-VERSION.md` + `npm run maj:notes` | — | Source des notes de version + version embarquée (`src/data/notes-version.ts` généré, cf. `screens/notes-version.md`) |
 | @redux-devtools/remote | ^1.0.1 | DevTools natif (dev) — cf. `etat-global.md` |
 
 ## Point d'entrée
@@ -40,7 +41,7 @@ codEbara/
 │   ├── store/           # Redux Toolkit — tranche utilisateur persistée (store, utilisateur, hooks)
 │   ├── utils/           # Règles métier pures (codes-bar.ts ; hash.ts SHA-256 §3.2 ; motDePasse.ts règle §5.10 ; base64.ts ; cdz.ts ZIP/.cdz §5.3-§6.3 ; figerUrl.ts — URL figée web)
 │   └── data/            # Données de l'app (carte.ts généré)
-├── scripts/             # Outils + contrôles (extraire-carte-svg.mjs, verifier-figer-url.mjs, generer-certificats.sh)
+├── scripts/             # Outils + contrôles (extraire-carte-svg.mjs, verifier-figer-url.mjs, generer-certificats.sh, maj-notes-version.mjs)
 ├── plugins/             # Config plugins locaux (certificat-serveur.js — TLS auto-signé dev, CNG)
 ├── app.config.ts        # Config dynamique — lit DEBUG → extra.debug (bouton debug)
 ├── .env                 # Variables par défaut versionnées (DEBUG, …)

@@ -102,12 +102,61 @@ function lireDatas(json: unknown): DonneesCarte {
   };
 }
 
+// deck.json — positions des textes incrustés sur la carte (exigence produit
+// 2026-11-16). Le repère est celui de front.png (deck.json porte `width` /
+// `height`, 600×1037 dans les archives actuelles) ; parsing tolérant (§6.4) :
+// deck.json peut manquer (archives futures/anciennes) et toute position aussi.
+export type PositionTexte = {
+  x: number;
+  y: number;
+  /** Taille de police dans le repère deck (`height`). */
+  taille: number;
+  /** Couleur principale d'écriture (`color`, ex. #0F0FAB ou #RRGGBBAA). */
+  couleur: string | null;
+};
+
+export type DeckCarte = {
+  /** Largeur du repère deck (= largeur de front.png). */
+  repere: number;
+  /** Hauteur du repère deck (= hauteur de front.png). */
+  hauteurRepere: number;
+  /** Position du nom (`positions.name`) — null si absente. */
+  nom: PositionTexte | null;
+};
+
+function lireDeck(json: unknown): DeckCarte | null {
+  const source = typeof json === 'object' && json !== null ? (json as Record<string, unknown>) : null;
+  if (!source) return null;
+  const positions =
+    typeof source.positions === 'object' && source.positions !== null
+      ? (source.positions as Record<string, unknown>)
+      : null;
+  const name =
+    positions && typeof positions.name === 'object' && positions.name !== null
+      ? (positions.name as Record<string, unknown>)
+      : null;
+  return {
+    repere: nombreOuNull(source, 'width') ?? 600,
+    hauteurRepere: nombreOuNull(source, 'height') ?? 1037,
+    nom:
+      name && typeof name.x === 'number' && typeof name.y === 'number' && typeof name.height === 'number'
+        ? {
+            x: name.x,
+            y: name.y,
+            taille: name.height,
+            couleur: typeof name.color === 'string' ? name.color : null,
+          }
+        : null,
+  };
+}
+
 // Une carte extraite : les trois PNG consommés par l'app + les données métier.
 export type Cdz = {
   front: Uint8Array;
   back: Uint8Array;
   perso: Uint8Array;
   datas: DonneesCarte;
+  deck: DeckCarte | null;
 };
 
 // Extrait et vérifie une archive .cdz complète :
@@ -143,12 +192,13 @@ export async function ouvrirCdz(octets: Uint8Array, checksumAttendu?: string): P
     return entree ? entree.async('string') : null;
   };
 
-  const [front, back, perso, octetsDatas, texteDatas, texteHashs] = await Promise.all([
+  const [front, back, perso, octetsDatas, texteDatas, texteDeck, texteHashs] = await Promise.all([
     lireBinaire('front.png'),
     lireBinaire('back.png'),
     lireBinaire('perso.png'),
     lireBinaire('datas.json'),
     lireTexte('datas.json'),
+    lireTexte('deck.json'),
     lireTexte('hashs.json'),
   ]);
 
@@ -187,7 +237,16 @@ export async function ouvrirCdz(octets: Uint8Array, checksumAttendu?: string): P
     }
   }
 
-  return { front, back, perso, datas: donnees };
+  let deck: DeckCarte | null = null;
+  if (texteDeck !== null) {
+    try {
+      deck = lireDeck(JSON.parse(texteDeck));
+    } catch {
+      // deck.json illisible : toléré (§6.4) — la carte s'affiche sans incrustation.
+    }
+  }
+
+  return { front, back, perso, datas: donnees, deck };
 }
 
 // Décode le base64 d'un .cdz servi dans un corps JSON {"card": "..."} (§5.3/§5.5).
@@ -201,7 +260,7 @@ export function cdzDepuisBase64(base64: string): Uint8Array {
 // contrôles d'intégrité §6.3 (sha256 archive + hashs.json) — réservés à la
 // fenêtre détail : l'affichage de la liste ne doit pas payer ce coût pour
 // chaque carte de la collection.
-export type ApercuCarte = { front: Uint8Array; datas: DonneesCarte };
+export type ApercuCarte = { front: Uint8Array; datas: DonneesCarte; deck: DeckCarte | null };
 
 export async function extraireApercu(octets: Uint8Array): Promise<ApercuCarte> {
   if (!estZipValide(octets)) {
@@ -218,9 +277,13 @@ export async function extraireApercu(octets: Uint8Array): Promise<ApercuCarte> {
   if (!entreeFront || !entreeDatas) {
     throw new ErreurCdz('Archive .cdz incomplète (front.png/datas.json attendus)');
   }
-  const [front, texteDatas] = await Promise.all([
+  const [front, texteDatas, texteDeck] = await Promise.all([
     entreeFront.async('uint8array'),
     entreeDatas.async('string'),
+    (async () => {
+      const entreeDeck = zip.file('deck.json');
+      return entreeDeck ? entreeDeck.async('string') : null;
+    })(),
   ]);
   let donnees: DonneesCarte;
   try {
@@ -228,5 +291,13 @@ export async function extraireApercu(octets: Uint8Array): Promise<ApercuCarte> {
   } catch {
     throw new ErreurCdz('datas.json illisible dans l\'archive .cdz');
   }
-  return { front, datas: donnees };
+  let deck: DeckCarte | null = null;
+  if (texteDeck !== null) {
+    try {
+      deck = lireDeck(JSON.parse(texteDeck));
+    } catch {
+      // Toléré (§6.4) — aperçu sans incrustation.
+    }
+  }
+  return { front, datas: donnees, deck };
 }

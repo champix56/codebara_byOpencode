@@ -2,15 +2,17 @@
 
 Dans le navigateur, **l'URL ne doit jamais quitter la base de l'app** : aucune
 route (`…/login`, `…/maison`, `…/carte/4…`) n'y apparaît, et la construction des
-fenêtres repart toujours du splash. Depuis la fin du router, **rien n'écrit
-jamais d'entrée d'historique** — la navigation est un état React (cf.
-`navigation.md`) — donc l'adresse ne peut pas bouger d'elle-même. Le dispositif
-restant (« web only », sans effet en natif) :
+fenêtres repart toujours du splash. Depuis le 2026-11-15, l'app écrit bien des
+**entrées d'historique** (une par niveau de pile, via `historique-web.ts` — cf.
+`navigation.md`) pour que le ‹ du navigateur revienne à la fenêtre précédente,
+mais TOUJOURS vers la racine `/` : aucune URL ne révèle la fenêtre. Le
+dispositif restant (« web only », sans effet en natif) :
 
 - `src/utils/figerUrl.ts` (`verrouillerUrlRacine`), posé au chargement du bundle
   par `index.ts`, AVANT le montage de l'app : réécriture de
   `history.pushState` / `history.replaceState` pour que toute écriture (lib
-  tierce, code futur) cible la racine `/` ; et **lien profond tapé à la main** :
+  tierce, code futur, **entrées d'historique de `historique-web.ts`**) cible la
+  racine `/` ; et **lien profond tapé à la main** :
   l'entrée d'historique est remise à `/` en une seule écriture — le flux repart
   du splash (auto-connexion par tokens → principal, cf. `screens/chargement.md`).
   Idempotent (marqueur sur `window`), silencieux hors navigateur — la garde est

@@ -32,3 +32,16 @@ maison `EnteteEcran`, ou bouton système Android) dépile via `retourner`.
 
 Après l'enregistrement du nom d'une carte fabriquée, la pile empile le **détail
 carte** au-dessus de l'usine (exigence produit 2026-11-15).
+
+## Web — historique navigateur aligné sur la pile
+
+Le ‹ du navigateur (bouton chrome, Alt+gauche, geste balayage) ne quitte plus
+l'app : `src/utils/historique-web.ts` pose **une entrée d'historique par niveau
+de pile** (`{ profondeur }`, URL toujours `/` via les réécritures de
+`figerUrl.ts`). `popstate` replie/remonte la pile pour rejoindre la profondeur
+de l'entrée (`retourner` / `remonter` — les fenêtres dépilées sont gardées dans
+`pileAnnulees` par `navigateur.ts`) ; sous la racine (state null), une entrée
+racine est repoussée — le joueur reste dans l'app. Le ‹ de l'en-tête (web)
+appelle `history.back()` : un retour = une entrée consommée, l'en-tête et le
+navigateur restent alignés. (`BackHandler` de react-native-web est un no-op qui
+loggue une erreur — l'abonnement Android est gardé natif-only dans `App.tsx`.)

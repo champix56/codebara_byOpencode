@@ -28,6 +28,7 @@ export type Fenetre =
   | { nom: 'mairie' }
   | { nom: 'boutique' }
   | { nom: 'arene' }
+  | { nom: 'notes' }
   | { nom: 'carte'; carteId: number };
 
 type Ecouteur = (fenetre: Fenetre) => void;
@@ -37,6 +38,10 @@ type Ecouteur = (fenetre: Fenetre) => void;
 let pile: Fenetre[] = [{ nom: 'chargement' }];
 
 let ecouteur: Ecouteur | null = null;
+
+// Fenêtres dépilées par `retourner` (la plus récente en dernier) — consommées
+// par `remonter` (« avant » du navigateur web).
+let pileAnnulees: Fenetre[] = [];
 
 export function enregistrerEcouteur(nouvelEcouteur: Ecouteur | null): void {
   ecouteur = nouvelEcouteur;
@@ -54,6 +59,8 @@ function emettre(): void {
 // Ouvre une fenêtre au-dessus de la courante (bouton retour / `retourner` actif).
 export function naviguer(fenetre: Fenetre): void {
   pile = [...pile, fenetre];
+  // Une nouvelle navigation invalide la pile « avant » (comme un navigateur).
+  pileAnnulees = [];
   emettre();
 }
 
@@ -61,15 +68,35 @@ export function naviguer(fenetre: Fenetre): void {
 // (retour arrière impossible vers elle — flux chargement/connexion/déconnexion).
 export function remplacer(fenetre: Fenetre): void {
   pile = [...pile.slice(0, -1), fenetre];
+  pileAnnulees = [];
   emettre();
 }
 
 // Bouton retour : dépile vers la fenêtre précédente. Renvoie `true` si un
 // dépilement a eu lieu (`false` = déjà à la racine ; sur Android le bouton
-// système rend alors la main à l'OS qui ferme l'app).
+// système rend alors la main à l'OS qui ferme l'app). La fenêtre retirée est
+// gardée en mémoire (pileAnnulees) pour l'équivalent « avant » (remonter,
+// utilisé par le glissement d'historique du navigateur web).
 export function retourner(): boolean {
   if (pile.length <= 1) return false;
+  pileAnnulees = [...pileAnnulees, pile[pile.length - 1]];
   pile = pile.slice(0, -1);
   emettre();
   return true;
+}
+
+// « Avant » : repose la dernière fenêtre dépilée par `retourner` (glissement
+// avant du navigateur web). Renvoie `false` s'il n'y a rien à remonter.
+export function remonter(): boolean {
+  if (pileAnnulees.length === 0) return false;
+  pile = [...pile, pileAnnulees[pileAnnulees.length - 1]];
+  pileAnnulees = pileAnnulees.slice(0, -1);
+  emettre();
+  return true;
+}
+
+// Profondeur courante de la pile — utilisée par le verrou d'historique web
+// (une entrée d'historique navigateur par niveau de pile).
+export function longueurPile(): number {
+  return pile.length;
 }

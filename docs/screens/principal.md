@@ -10,7 +10,7 @@ Fenêtre : `principal` — fichier `src/ecrans/principal.tsx`
 
 - **Barre d'en-tête maison** (`src/components/entete-ecran.tsx`) : titre **« CodEbara »**, bouton ☰ à gauche (slot `gauche`), **pas de retour en arrière** (hub du jeu, entrée par remplacement).
 - **Carte** : chaque `<image>` du SVG est dessinée dans une surface mesurée, échelle `xMidYMid meet` (tout le viewBox visible, centré, marges égales). Les images portant un `data-action` deviennent des `Pressable` (opacité 0,85 à l'appui).
-- **Bandeau publicitaire** (composant `BandeauPub`) : bande de **52 px + inset safe-area** en bas, fond gris très clair avec filet haut discret et libellé « Espace publicitaire » — contenu placeholder en attendant le serveur.
+- **Bandeau publicitaire** (composant `BandeauPub`) : bande de **68 px + inset safe-area** en bas, fond gris très clair avec filet haut discret et libellé « Espace publicitaire » — contenu placeholder en attendant le serveur. **Sous le bandeau (exigence 2026-11-16) : champ de version « CodEbara v0.0.x »** pressable (vert) — ouvre la fenêtre `notes` (cf. `notes-version.md`) ; `VERSION_APPLI` vient de `src/data/notes-version.ts` (généré depuis `NOTES-VERSION.md`).
 - **Menu latéral** (composant `MenuLateral` — ouvert par ☰, fermé par tap sur la zone assombrie) : liste les fenêtres Usine, Maison, Mairie, Boutique, Arène ; en bas un bouton rouge **« Se déconnecter »**.
 
 ## États

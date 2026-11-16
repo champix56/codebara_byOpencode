@@ -9,9 +9,18 @@ Fenêtre : `carte` — `App.tsx` monte `src/components/carte-detail.tsx` avec l'
 ## Structure visuelle
 
 - Barre d'en-tête maison : titre « Carte » + bouton retour.
-- En-tête : avatar `perso.png` (≤256×256, arrondi) + nom (`datas.name`, « Carte #id » si vide) + `#id`.
+- **Mise en page compacte (exigence 2026-11-15) : tout tient DANS l'écran sur
+  mobile** — avatar `perso.png` centré en tête de fenêtre, visuel 3D, specs en
+  dessous ; ScrollView en garde-fou. La largeur de la carte du visuel est
+  calculée par `useWindowDimensions` : bornée par 42 % de la largeur d'écran,
+  par un budget vertical (~45 % de la hauteur — la vitrine 3D fait ~2,5× la
+  largeur de la carte), 200 px max, 120 px plancher.
+- Nom (`datas.name`, « Carte #id » si vide) centré sous l'avatar + `#id`.
+- **Nom incrusté sur le visuel 3D** (exigence 2026-11-16) : position et style
+  lus dans `deck.json` (`positions.name` — x, y, taille de police, couleur) ;
+  cf. `visuel-carte-3d.md` / `cdz-pipeline.md`.
 - **Renommage sur place** (exigence 2026-11-15) : crayon **✎** à côté du nom → champ texte pré-rempli (60 car. max) + « Enregistrer » / « Annuler » + erreur éventuelle.
-- **Visuel 3D en vitrine de musée pleine largeur (`visuel-carte.tsx`, carte 300 px)** : la vitrine occupe **toute la largeur du parent** (fond sombre `#191d24`, liseré) ; la carte (faces `front.png` / `back.png` sur un plan à perspective) est posée sur un **pupitre** (dalle, fût, socle) éclairé par un **spot plafonnier** (faisceau triangulaire + halo chaud) — son **ombre glisse sur la dalle** avec la rotation. Le **fond lointain** bouge en **parallaxe** (bien moins que la carte) sous une **vignette** qui assombrit les bords : il paraît plus loin que la carte. Glissement **horizontal** = rotation complète (360° libres) — le **dos (`back.png`) apparaît passé 90°, non miroir** (`transform-style: preserve-3d` sur web, composition native correcte d'origine) ; glissement **vertical** = inclinaison bornée ±30° qui révèle les **reflets de lumière** ; **pincer à deux doigts** (écarter / resserrer) = **zoom ×0,5 à ×3** (distance entre les deux touches, rotation figée pendant le pincement, zoom conservé au relâchement — exigence 2026-11-15). Pointeur (web) ou doigt (natif) via le même système répondeur, posé sur toute la vitrine. La pose est conservée au relâchement.
+- **Visuel 3D en vitrine de musée (`visuel-carte.tsx`, carte compacte, cf. ci-dessus)** : la vitrine occupe **toute la largeur du parent** (fond sombre `#191d24`, liseré) ; la carte (faces `front.png` / `back.png` sur un plan à perspective) est posée sur un **pupitre** (dalle, fût, socle) éclairé par un **spot plafonnier** (faisceau triangulaire + halo chaud) — son **ombre glisse sur la dalle** avec la rotation. Le **fond lointain** bouge en **parallaxe** (bien moins que la carte) sous une **vignette** qui assombrit les bords : il paraît plus loin que la carte. Glissement **horizontal** = rotation complète (360° libres) — le **dos (`back.png`) apparaît passé 90°, non miroir** : **face unique, angle effectif θ/θ+180, image qui bascule** (correctif 2026-11-16 — aucune rotation imbriquée ni `backfaceVisibility` : Android ne rend pas les enfants d'un pivot 3D composé au-delà de 90°) ; glissement **vertical** = inclinaison bornée ±30° qui révèle les **reflets de lumière** ; **pincer à deux doigts** (écarter / resserrer) = **zoom ×0,5 à ×3** (distance entre les deux touches, rotation figée pendant le pincement, zoom conservé au relâchement). Pointeur (web) ou doigt (natif) via le même système répondeur, posé sur toute la vitrine. La pose est conservée au relâchement.
 - Bloc stats (tolérant §6.4) : Puissance (`datas.power` ou valeur serveur), Santé, Attaque, Rareté, **Saison** — nom lisible (`datas.saison`, parsing opportuniste) sinon `seasonid`, « — » si aucun.
 - Bloc « Capacités spéciales » si `specials` non vide : nom, attaque/santé, durée (`turn`).
 

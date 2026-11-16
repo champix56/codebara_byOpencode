@@ -12,10 +12,11 @@ import {
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { naviguer } from '../navigation/navigateur';
+import IncrustationNomCarte from './incrustation-nom-carte';
 import { ErreurSession, listerCartes, type CarteListee } from '../services/api';
 import { lireCarteLocale, lireIndex, type EntreeIndex } from '../services/collection';
 import { useAppSelector } from '../store/hooks';
-import { extraireApercu, type DonneesCarte } from '../utils/cdz';
+import { extraireApercu, type DeckCarte, type DonneesCarte } from '../utils/cdz';
 import { encoderBase64 } from '../utils/base64';
 
 // Fenêtre maison : aperçu des cartes en possession du joueur courant —
@@ -29,7 +30,12 @@ import { encoderBase64 } from '../utils/base64';
 // encodée en data URI + datas.json (nom frais, saison, valeurs). Les cartes
 // jamais ouvertes localement restent sans aperçu (cadre + #id) — le détail
 // les téléchargera à l'ouverture (§5.5).
-type Apercu = { image: string; datas: DonneesCarte };
+type Apercu = {
+  image: string;
+  datas: DonneesCarte;
+  /** deck.json (positions des incrustations) — null si absent de l'archive. */
+  deck: DeckCarte | null;
+};
 
 // Valeur de la liste déroulante « Série » : tout, une saison précise
 // (datas.seasonid) ou les cartes sans série connue (archive absente).
@@ -85,6 +91,9 @@ export default function MaisonEcran() {
   // un tirer-pour-actualiser ne relit pas les archives déjà couvertes).
   const [apercus, definirApercus] = useState<Record<number, Apercu>>({});
   const tenteRef = useRef<Set<number>>(new Set());
+  // Largeur mesurée de la grille — la taille de police des incrustations de
+  // nom suit la largeur réelle d'une cellule (les cellules sont en %).
+  const [largeurGrille, definirLargeurGrille] = useState(0);
 
   const charger = useCallback(
     async (modeRafraichit: boolean) => {
@@ -149,6 +158,7 @@ export default function MaisonEcran() {
             [carte.id]: {
               image: `data:image/png;base64,${encoderBase64(apercu.front)}`,
               datas: apercu.datas,
+              deck: apercu.deck,
             },
           }));
         } catch {
@@ -331,7 +341,10 @@ export default function MaisonEcran() {
           {cartesFiltrees.length === 0 ? (
             <Text style={styles.texteState}>Aucune carte ne correspond à la recherche.</Text>
           ) : (
-            <View style={styles.grille}>
+            <View
+              style={styles.grille}
+              onLayout={(evenement) => definirLargeurGrille(evenement.nativeEvent.layout.width)}
+            >
               {cartesFiltrees.map((carte) => {
                 const apercu = apercus[carte.id];
                 const nom =
@@ -340,6 +353,9 @@ export default function MaisonEcran() {
                 const puissance = apercu?.datas.power ?? carte.cardpower ?? '—';
                 const sante = apercu?.datas.health ?? carte.health ?? '—';
                 const attaque = apercu?.datas.attack ?? carte.attack ?? '—';
+                // Largeur réelle de l'image front dans la cellule (cellule en
+                // % de la grille − padding 4×2) — pour l'échelle de police.
+                const largeurCarte = largeurGrille / colonnes - 8;
                 return (
                   <View
                     key={carte.id}
@@ -352,11 +368,25 @@ export default function MaisonEcran() {
                     >
                       <View style={styles.cadre}>
                         {apercu ? (
-                          <Image
-                            source={{ uri: apercu.image }}
-                            style={styles.front}
-                            resizeMode="contain"
-                          />
+                          <>
+                            <Image
+                              source={{ uri: apercu.image }}
+                              style={styles.front}
+                              resizeMode="contain"
+                            />
+                            {/* Nom incrusté (deck.json positions.name). */}
+                            <IncrustationNomCarte
+                              position={apercu.deck?.nom ?? null}
+                              repere={apercu.deck?.repere ?? 600}
+                              hauteurRepere={apercu.deck?.hauteurRepere ?? 1037}
+                              nom={
+                                apercu.datas.name && apercu.datas.name.length > 0
+                                  ? apercu.datas.name
+                                  : `Carte #${carte.id}`
+                              }
+                              largeurCarte={largeurCarte}
+                            />
+                          </>
                         ) : (
                           <Text style={styles.sansApercu}>#{carte.id}</Text>
                         )}

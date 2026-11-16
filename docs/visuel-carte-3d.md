@@ -20,11 +20,16 @@ de la largeur de la carte (paramètre `largeur`).
 
 ## Gestes (PanResponder posé sur toute la vitrine, pointeur web ou doigt natif)
 
-- **Glissement horizontal = rotation complète illimitée** : le dos (`back.png`)
-  apparaît passé 90° **NON MIROIR** — web exige `transform-style: preserve-3d`
-  sur le pivot (sinon aplanissement = miroir ; cast `PROFONDEUR_WEB`, web seul —
-  react-native-web transmet bien la propriété via son compilateur CSS), natif
-  compose correctement d'origine (`backfaceVisibility` standard).
+- **Glissement horizontal = rotation complète illimitée** : le dos (`back.png`
+  du `.cdz`) apparaît passé 90° **NON MIROIR**. Correctif 2026-11-16 (Android
+  et iOS) : **face unique sans rotation imbriquée** — Android cesse de rendre
+  les enfants d'un pivot 3D composé au-delà de 90° (le dos ne s'affichait
+  jamais, ni via `backfaceVisibility` ni via l'élimination par opacité des
+  faces). Le pivot tourne sur l'**angle effectif** `θ' = θ ou θ+180` (bande
+  -90°..+90° : la carte est toujours face au spectateur) et l'image bascule
+  front/back — le basculement est invisible (la carte est de profil à 90°,
+  largeur projetée `|cos θ|` continue) ; aucune face arrière à rendre, donc
+  aucun `backfaceVisibility` ni `preserve-3d` nécessaire (web compris).
 - **Glissement vertical = inclinaison bornée ±30°** qui révèle les **reflets de
   lumière** (bandes translucides pures RN — glissement avec la rotation via sin,
   intensité avec l'inclinaison).
@@ -33,6 +38,11 @@ de la largeur de la carte (paramètre `largeur`).
   premier mouvement du pincé, rotation figée pendant le pincement, référence de
   rotation réarmée à la sortie (pas de coup de rotation avec le dx cumulatif) —
   l'échelle est posée sur le pivot.
+- **Nom incrusté sur le recto** (exigence 2026-11-16) : `datas.name` (repli
+  « Carte #id ») dessiné à la position `deck.json` → `positions.name` {x, y,
+  `height` = taille de police, `color`} dans le repère front.png 600×1037 —
+  composant partagé `incrustation-nom-carte.tsx` (police mise à l'échelle avec
+  la carte, 2 lignes max, ancré haut-gauche). Le dos n'en porte pas.
 - La pose (rotation, inclinaison, zoom) est **conservée au relâchement** ;
   dans une `ScrollView`, un geste vertical passe à la liste (capture à partir
   d'un déplacement réel).

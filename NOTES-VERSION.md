@@ -6,6 +6,10 @@ courante embarquée dans l'app (`src/data/notes-version.ts`, généré par
 `npm run maj:notes`). Les nouveautés sont suivies à partir de v0.0.8 ; les
 évolutions antérieures ne sont pas listées.
 
+## v0.0.11
+
+- La collection est vérifiée directement avec le serveur à chaque connexion : les cartes abîmées sur le téléphone sont réparées automatiquement, et les cartes manquantes sont récupérées et contrôlées dès leur téléchargement.
+
 ## v0.0.10
 
 - Le nom de la carte est écrit sur la carte elle-même, à la place prévue par le paquet (taille et couleur du texte incluses) — visuel 3D et grille de la maison.

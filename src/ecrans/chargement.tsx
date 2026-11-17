@@ -10,9 +10,9 @@ import {
 } from 'react-native';
 import { remplacer } from '../navigation/navigateur';
 import { authentifierParTokens, ErreurSession } from '../services/api';
-import { supprimerCarte } from '../services/collection';
 import {
   verifierEtRecuperer,
+  type CarteCorrompue,
   type PhaseVerification,
 } from '../services/verification';
 import { useAppDispatch } from '../store/hooks';
@@ -31,18 +31,19 @@ import { seConnecter, seDeconnecter } from '../store/utilisateur';
 //    est remis, étape « connexion » (déjà validée) puis « récupération des
 //    cartes ».
 //
-// Après la connexion : vérification de la collection (§5.4 + cache local,
-// cf. services/verification.ts) sous le libellé « récupération des cartes » —
-// les cartes dont le hash local diffère du serveur ouvrent une MODAL
-// (carte par défaut + raison + unique bouton Détruire) ; la destruction
-// supprime l'archive locale et la carte est re-téléchargée avec les absentes.
-// Succès complet → fenêtre principale.
+// Après la connexion : vérification + remplissage du stockage local des .cdz
+// (exigence produit 2026-11-17, cf. services/verification.ts) sous le libellé
+// « récupération des cartes » — chaque archive locale est vérifiée contre le
+// serveur (GET /card/check) ; les archives corrompues sont supprimées
+// automatiquement et re-téléchargées. À la fin, la modal du splash liste les
+// cartes corrompues (unique bouton OK — l'utilisateur est averti, aucune
+// action n'est requise de sa part). Succès complet → fenêtre principale.
 type Mode = 'auto' | 'post-connexion';
 
 type Props = { mode?: Mode };
 
-// Écart de hash en attente de décision : carte + raison + action unique.
-type Ecart = { carteId: number; raison: string; surDetruire: () => void };
+// Cartes corrompues à annoncer dans la modal finale (id + raison).
+type AnnonceCorrompues = CarteCorrompue[];
 
 // Temps minimal d'affichage d'un libellé (lisibilité des étapes du splash).
 const PAUSE_ETAPE_MS = 900;
@@ -58,7 +59,8 @@ export default function Chargement({ mode = 'auto' }: Props) {
     total: number;
   } | null>(null);
   const [fraction, definirFraction] = useState(0.1);
-  const [ecart, definirEcart] = useState<Ecart | null>(null);
+  // Cartes corrompues annoncées en fin de parcours (modal unique, OK seul).
+  const [corrompues, definirCorrompues] = useState<AnnonceCorrompues | null>(null);
   const [erreur, definirErreur] = useState<string | null>(null);
 
   // Un seul lancement automatique ; « Réessayer » relance le même parcours.
@@ -131,24 +133,17 @@ export default function Chargement({ mode = 'auto' }: Props) {
       const part = total > 0 ? faites / total : 1;
       definirFraction(phase === 'verification' ? 0.35 + part * 0.3 : 0.7 + part * 0.27);
     };
+    // Cartes corrompues remontées par le service (copie locale, l'état React
+    // ne serait pas lisible de façon synchrone juste après l'await).
+    let corrompues: CarteCorrompue[] = [];
     try {
       await verifierEtRecuperer(idUser, {
-        // Parcours suspendu jusqu'à la destruction confirmée dans la modal.
-        surEcartHash: (carteId, raison) =>
-          new Promise<void>((resoudre) => {
-            definirEcart({
-              carteId,
-              raison,
-              surDetruire: async () => {
-                definirEcart(null);
-                try {
-                  await supprimerCarte(idUser, carteId);
-                } finally {
-                  resoudre();
-                }
-              },
-            });
-          }),
+        // Les corrompues (supprimées + re-téléchargées par le service) sont
+        // annoncées à la fin — le parcours ne s'arrête plus par carte.
+        surCorrompues: (cartes) => {
+          corrompues = cartes;
+          if (cartes.length > 0) definirCorrompues(cartes);
+        },
         surProgression: deplacement,
       });
     } catch (l_erreur) {
@@ -161,6 +156,9 @@ export default function Chargement({ mode = 'auto' }: Props) {
       return;
     }
     definirFraction(1);
+    // Modal d'avertissement d'abord (OK = unique action), puis fenêtre
+    // principale — sinon navigation directe.
+    if (corrompues.length > 0) return;
     remplacer({ nom: 'principal' });
   }, [dispatcher, mode]);
 
@@ -211,28 +209,39 @@ export default function Chargement({ mode = 'auto' }: Props) {
         )}
       </View>
 
-      {/* Modal d'écart de hash — carte par défaut + raison + UNIQUE bouton
-          destruction (décision produit 2026-11-12) : l'archive locale est
-          corrompue/modifiée, rien d'autre n'est possible. */}
-      <Modal visible={ecart !== null} animationType="fade" transparent>
+      {/* Modal d'avertissement des cartes corrompues (exigence produit
+          2026-11-17) : les archives ont DÉJA été supprimées du stockage et
+          re-téléchargées par le service — l'utilisateur n'est que prévenu
+          (unique bouton OK), le splash ne navigue qu'après. */}
+      <Modal visible={corrompues !== null} animationType="fade" transparent>
         <View style={styles.voile}>
           <View style={styles.cadre}>
             <View style={styles.carteDefaut}>
               <Text style={styles.carteDefautSymbole}>⚠</Text>
               <Text style={styles.carteDefautId}>
-                {ecart ? `Carte #${ecart.carteId}` : ''}
+                {corrompues && corrompues.length === 1
+                  ? `Carte #${corrompues[0].carteId}`
+                  : `${corrompues?.length ?? 0} cartes`}
               </Text>
             </View>
-            <Text style={styles.cadreTitre}>Carte corrompue</Text>
-            <Text style={styles.cadreRaison}>{ecart?.raison}</Text>
+            <Text style={styles.cadreTitre}>Carte(s) corrompue(s)</Text>
+            <Text style={styles.cadreRaison}>
+              {corrompues
+                ?.map((c) => `#${c.carteId} — ${c.raison}`)
+                .join('\n')}
+              {'\n\n'}Elles ont été supprimées du stockage et re-téléchargées.
+            </Text>
             <Pressable
               style={({ pressed }) => [
                 styles.boutonDetruire,
                 pressed && styles.boutonDetruireAppuye,
               ]}
-              onPress={() => ecart?.surDetruire()}
+              onPress={() => {
+                definirCorrompues(null);
+                remplacer({ nom: 'principal' });
+              }}
             >
-              <Text style={styles.boutonTexte}>Détruire</Text>
+              <Text style={styles.boutonTexte}>OK</Text>
             </Pressable>
           </View>
         </View>

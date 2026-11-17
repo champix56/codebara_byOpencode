@@ -397,6 +397,22 @@ export async function telechargerCarte(carteId: number): Promise<CarteTelecharge
   };
 }
 
+// ─── Vérification d'intégrité (§5.6 – GET /card/check) ──────────────────────
+
+// Compare le sha256 du fichier .cdz COMPLET que le client possède avec celui
+// enregistré côté serveur (anti-tamper). `cid` et `hash` voyagent dans le
+// header `datas` (pas de body, §5.6). Réponse {isChecksumGood, API_REQUEST_TOKEN}
+// — la rotation du token est gérée par `appelProtege`.
+export async function verifierChecksumCarte(
+  carteId: number,
+  hash: string,
+): Promise<boolean> {
+  const donnees = await appelProtege('/card/check', {
+    datasExtra: { cid: carteId, hash },
+  });
+  return donnees.isChecksumGood === true;
+}
+
 // ─── Renommage (§5.7 – PUT /card/name, depuis l'usine) ──────────────────────
 
 // Réponse : même forme qu'une carte fraîchement mise à jour {cid, card} —

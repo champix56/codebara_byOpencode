@@ -9,7 +9,7 @@ Splash piloté par les **vraies étapes** du démarrage (plus de minuteur artifi
 1. **Connexion** (libellé affiché, min. 900 ms de lisibilité) :
    - mode `auto` : libellé « **tentative de connexion auto** » — si des tokens sont persistés → `authentifierParTokens` (`GET /user/auth` §5.2b) ; données fraîches → `seConnecter` (tokens conservés) ; couple refusé → `seDeconnecter` + connexion ; panne → connexion (tokens non consommés conservés). Sans tokens → connexion directe.
    - mode `post-connexion` (retour du bouton « Connexion » de la fenêtre connexion) : libellé « **connexion** » — la session vient d'être validée par `authentifierParLogin`, aucun appel redondant.
-2. **« récupération des cartes »** : `verifierEtRecuperer` (cf. `src/services/verification.ts`) — lecture `GET /card` (§5.4), vérification du **hash** (sha256) de chaque archive locale contre le `cardHash` du serveur, puis téléchargement des seules cartes **absentes ou détruites** (`GET /card/{id}` §5.5, validation §6.3 avant stockage + maj index du nom).
+2. **« récupération des cartes »** : `verifierEtRecuperer` (cf. `src/services/verification.ts`) — lecture `GET /card` (§5.4), pour chaque archive locale `sha256` du fichier **complet** vérifié contre le serveur via **`GET /card/check`** (§5.6) ; puis téléchargement des cartes **absentes ou supprimées** (`GET /card/{id}` §5.5) : stockage immédiat, validation §6.3 avant stockage, **puis** vérification serveur du checksum du fichier stocké (`/card/check`).
 3. Succès → `remplacer({ nom: 'principal' })` ; échec d'auto-connexion → `remplacer({ nom: 'connexion' })`.
 
 ## Structure visuelle
@@ -18,20 +18,27 @@ Splash piloté par les **vraies étapes** du démarrage (plus de minuteur artifi
 - En bas : libellé de l'étape + « … » (gris 14 px), compteur `n/total` pendant la récupération, **barre de progression** (240 px, piste #e5e7eb, remplissage vert #43a047) dont la fraction suit les phases (connexion 10 % → vérification 35-65 % → téléchargement 70-97 %), spinner vert.
 - **Erreur de récupération** : message rouge + bouton « Réessayer » (relance le même parcours).
 
-## Modal de destruction (carte corrompue)
+## Modal d'avertissement (cartes corrompues)
 
-Pendant la vérification, une archive locale dont le **hash ≠ cardHash serveur** suspend le parcours et ouvre une modal (décision produit 2026-11-12) :
+Exigence produit **2026-11-17** (remplace la modal de destruction par carte du
+2026-11-12) : une archive dont le checksum est refusé par `/card/check` est
+**supprimée automatiquement** du stockage et re-téléchargée — **sans pause ni
+décision utilisateur**. En fin de parcours, si des cartes ont été touchées,
+une modal unique :
 
-- **carte par défaut** (cadre gris, ⚠, « Carte #id » — le contenu local n'est pas affiché, il n'est plus fiable) ;
-- **la raison** : « Hash de l'archive locale (…) différent du hash serveur (…) — archive corrompue ou modifiée. » ;
-- **un unique bouton « Détruire »** (rouge, aucune autre action) → suppression de l'archive locale (`supprimerCarte`, collection.ts) → le parcours reprend et la carte est re-téléchargée avec les absentes.
+- **carte par défaut** (cadre gris, ⚠, « Carte #id » ou le nombre de cartes) ;
+- **la liste** : « #id — raison » (checksum refusé par le serveur,
+  téléchargement refusé, archive non conforme…) + « Elles ont été supprimées
+  du stockage et re-téléchargées. » ;
+- **un unique bouton « OK »** — le splash ne navigue vers la fenêtre
+  principale qu'après sa fermeture.
 
 ## États
 
-- `libelle` (étape affichée), `progression` { phase, faites, total }, `fraction` (barre), `ecart` (modal en attente de destruction), `erreur`.
+- `libelle` (étape affichée), `progression` { phase, faites, total }, `fraction` (barre), `corrompues` (liste à annoncer dans la modal finale), `erreur`.
 - Lancement automatique unique à la montée (`lancementRef`) ; « Réessayer » ré-arme et relance (les tokens relus du store sont à jour après rotation §3.3).
 - `ErreurSession` : le service a déjà purgé + navigué vers la connexion — l'écran ignore l'erreur.
-- Un écart de hash en attente tient le splash figé (promesse résolue par la destruction).
+- Une erreur d'appel (`/card/check` injoignable, etc.) interrompt le parcours avec l'écran d'erreur — **on ne détruit jamais une archive sur un doute**.
 
 ## Navigation
 

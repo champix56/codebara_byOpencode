@@ -1,14 +1,20 @@
 // GÉNÉRÉ par scripts/maj-notes-version.mjs — NE PAS ÉDITER À LA MAIN.
 // Source maintenue : NOTES-VERSION.md (racine) — npm run maj:notes après édition.
 // VERSION_APPLI = première section du md (la plus récente) ; affichée en jeu
-// sous le bandeau publicitaire (« CodEbara v0.0.11 ») et
+// sous le bandeau publicitaire (« CodEbara v0.0.12 ») et
 // consommée par la fenêtre notes de version.
 
-export const VERSION_APPLI = '0.0.11';
+export const VERSION_APPLI = '0.0.12';
 
 export type NoteVersion = { version: string; lignes: string[] };
 
 export const NOTES_VERSION: NoteVersion[] = [
+  {
+    "version": "v0.0.12",
+    "lignes": [
+      "Nouveau : la saison d'affichage (décor de la carte du jeu) est chargée depuis le serveur et mise à jour automatiquement à chaque connexion. Le jeu affiche maintenant le décor de la saison en cours, ses bâtiments et ses détails."
+    ]
+  },
   {
     "version": "v0.0.11",
     "lignes": [

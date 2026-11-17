@@ -46,7 +46,9 @@ yarn-error.*
 /android
 
 # paquets d'-assets externes (.cdz = zip binaire, hors assets Expo) — jamais versionnés
+# (.cds idem : paquet de saison d'affichage, livré au serveur, cf. docs/cds-format.md)
 *.cdz
+*.cds
 
 # certificats du serveur de développement (auto-signé, §HTTPS) —
 # générés par scripts/generer-certificats.sh.

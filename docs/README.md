@@ -12,6 +12,7 @@ Application mobile Expo / React Native. Cette documentation est le point d'entr�
 | [etat-global.md](./etat-global.md) | Redux Toolkit : store persisté, tranche utilisateur (tokens), DevTools, déconnexion |
 | [services-serveur.md](./services-serveur.md) | api.ts (client HTTP, tokens rotatifs, sessions), collection.ts (cache .cdz), verification.ts |
 | [cdz-pipeline.md](./cdz-pipeline.md) | Lecture/validation des archives .cdz (ZIP, sha256, hashs.json, saisons) |
+| [cds-format.md](./cds-format.md) | Format .cds (saison d'affichage : fond + bâtiments cliquables), sélection serveur, endpoints /season, intégration client v0.0.12 (services/saison.ts) |
 | [visuel-carte-3d.md](./visuel-carte-3d.md) | Visuel 3D vitrine de musée (rotation, inclinaison, reflets, zoom 2 doigts) |
 | [serveur-dev-https.md](./serveur-dev-https.md) | Certificat auto-signé dev (génération, intégration Android/iOS, profil mobileconfig) |
 | [development.md](./development.md) | Installation, commandes de dev, vérifications, gestion des dépendances, builds EAS |

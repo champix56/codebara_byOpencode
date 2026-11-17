@@ -7,6 +7,7 @@ complet** est dans `integration-client.md` **à la racine du projet** (§ réfé
 
 - Auth login/pass (`GET /user/auth` — §5.2a), auth par tokens (§5.2b), `POST /user` (création — §5.1), `POST /user/renew-password` (§5.9), `PUT /user` (maj profil mairie — §5.10).
 - Cartes : `POST /card` (génération depuis un code-barres — §5.3, timeout dédié **150 s**, réponse synchrone `card` ou asynchrone `cardid` seul), `GET /card` (liste — §5.4, sans noms ni saisons), `GET /card/{id}` (une carte + son fichier — §5.5), **`GET /card/check` (§5.6 — anti-tamper : `cid` + `hash` sha256 du .cdz complet dans le header `datas`, réponse `isChecksumGood`)**, `PUT /card/name` (renommage — §5.7, réponse `{cid, card}` sans checksum global).
+- Saisons d'affichage : **`GET /season/check` (§5.11 — `verifierSaison(hash, pays)` : hash sha256 du .cds courant, `country` dans le header `datas`)** et **`GET /season` (`telechargerSaison(pays)` — .cds base64, timeout dédié 60 s ; null = aucune saison active)** — consommées par `saison.ts`, cf. `cds-format.md`.
 - Appels protégés **sérialisés** (§9.1), **rotation** du `API_REQUEST_TOKEN` sur tout succès (§3.3), **mort de session** (« Invalid REQUEST TOKEN ») ET **sortie volontaire** (`quitterSession`, déconnexion mairie) = reset tranche + purge + fenêtre connexion (`remplacer`, navigateur).
 - Timeout 10 s (hors génération, §2), base URL `EXPO_PUBLIC_SERVER_URL` (`.env`).
 
@@ -38,3 +39,24 @@ collection.ts) :
 Les erreurs d'appel (réseau/session) interrompent le splash (Réessayer) — on ne
 détruit jamais sur un doute. Progression poussée à l'appelant ; liste des
 corrompues remontée une fois en fin de course (`surCorrompues`).
+
+## `src/services/saison.ts` — saison d'affichage (.cds, §5.11)
+
+Intégrée **v0.0.12** (format : `cds-format.md`). Après les cartes, le splash
+(étape « saison d'affichage ») appelle `chargerSaisonAffichage()` — **ne lève
+jamais**, tout incident retombe sur la saison embarquée :
+
+- **mobile** : `.cds` local (`<documentDirectory>/saison.cds`, sandbox) →
+  sha256 vérifié par `GET /season/check` (`country` = locale du téléphone,
+  `expo-localization`) ; bon → saison locale ; écart/absente → `GET /season`
+  → stockage local immédiat puis affichage ;
+- **web** : toujours `GET /season` (pas de stockage, data URIs PNG) ;
+- **aucune saison / archive illisible / panne** → saison embarquée
+  (`CARTE_ZONES`, rendu d'origine).
+
+Le résultat (viewbox + zones avec sources d'images résolues : fichiers cache
+natif `<cache>/saisons/`, require() embarqué, data URI web) vit dans une
+variable de module — `saisonAffichageCourante()` lue par la fenêtre
+principale ; `carte-interactive.tsx` est générique (props `viewbox` + `zones`).
+Parsing season.json **tolérant** (esprit §6.4) ; seuls les PNG référencés
+sont extraits.

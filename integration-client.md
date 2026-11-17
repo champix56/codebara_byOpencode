@@ -190,8 +190,8 @@ datas: {"API_TOKEN": "ab12...", "API_REQUEST_TOKEN": "cd34..."}
 | `/card/{id}` | GET (une carte) | tokens | **✔ actif** |
 | `/card/check` | GET (checksum) | tokens | **✔ actif** |
 | `/card/name` | PUT (renommer) | tokens | **✔ actif** |
-| `/season` | GET (app season) | tokens | ✔ **stub** (renvoie `{"appseason": ""}`) |
-| `/season/check` | GET | tokens | ✗ prévu (404) |
+| `/season` | GET (saison d'affichage courante, `.cds` base64) | tokens | **✔ actif** (implémenté 2026-11-17, branche `opencode` du serveur, cf. §5.11) |
+| `/season/check` | GET (hash de la saison courante) | tokens | **✔ actif** (implémenté 2026-11-17, branche `opencode`, cf. §5.11) |
 | `/`, `/favicon.ico`, `*.png`, `*.apk` | GET | non | ✔ (statiques) |
 
 ### 5.1 `POST /user` — création de compte (sans authentification)
@@ -562,6 +562,37 @@ Détails : `nickname` vide ou non-chaîne → 400 (corps illisible) ; `last_acti
 notifié côté base ; la session et les tokens **ne dépendent pas** du mot de passe :
 aucune reconnexion nécessaire après un `PUT /user` réussi (l'`API_REQUEST_TOKEN`
 renouvelé de la réponse reste valable).
+
+### 5.11 `GET /season` / `GET /season/check` — saison d'affichage (tokens requis)
+
+Implémentés côté serveur le 2026-11-17 (branche `opencode` de pyCodebara2) et
+**intégrés au client en v0.0.12** (`src/services/saison.ts`, étape splash
+« saison d'affichage » — pays = locale du téléphone dans le champ `country`
+du header `datas`). Le format du paquet et le flux client sont détaillés dans
+`docs/cds-format.md` de ce dépôt ; côté serveur : `docs/seasons.md`
+(§ app-seasons).
+
+**Pays de la demande** : champ `country` du header `datas` (ex. `"fr-FR"`,
+absent → fallback `intl`). Sélection : saisons actives (`debut ≤ maintenant ≤
+fin`) → priorité au pays → plus récente en cas d'ex æquo → `intl` sinon.
+
+**`GET /season/check`** (succès) :
+
+```json
+{"appseason": 1, "hash": "0bf0…64 hex…", "API_REQUEST_TOKEN": "…"}
+```
+
+**`GET /season`** (succès) :
+
+```json
+{"appseason": 1, "hash": "0bf0…64 hex…", "season": "<base64 du .cds>", "API_REQUEST_TOKEN": "…"}
+```
+
+**Aucune saison active** (les deux endpoints) : `appseason` **et** `hash` **vides**
+(`""`) — le client doit utiliser la saison **embarquée dans sa build** ; token
+renouvelé présent quand même. Le `.cds` (~5,9 Mo → base64 ~7,8 Mo) : le décodage
+base64 redonne un ZIP dont l'archive contient `season.json` + PNG. Le hash sert
+au mobile à comparer avec son `.cds` local (bon → local ; mauvais → télécharger).
 
 ---
 

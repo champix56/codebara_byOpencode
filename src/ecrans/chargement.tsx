@@ -15,6 +15,7 @@ import {
   type CarteCorrompue,
   type PhaseVerification,
 } from '../services/verification';
+import { chargerSaisonAffichage } from '../services/saison';
 import { useAppDispatch } from '../store/hooks';
 import { store } from '../store/store';
 import { seConnecter, seDeconnecter } from '../store/utilisateur';
@@ -37,7 +38,9 @@ import { seConnecter, seDeconnecter } from '../store/utilisateur';
 // serveur (GET /card/check) ; les archives corrompues sont supprimées
 // automatiquement et re-téléchargées. À la fin, la modal du splash liste les
 // cartes corrompues (unique bouton OK — l'utilisateur est averti, aucune
-// action n'est requise de sa part). Succès complet → fenêtre principale.
+// action n'est requise de sa part). Puis étape « saison d'affichage »
+// (.cds local vérifié via /season/check ou GET /season — repli saison
+// embarquée, cf. services/saison.ts). Succès complet → fenêtre principale.
 type Mode = 'auto' | 'post-connexion';
 
 type Props = { mode?: Mode };
@@ -155,7 +158,15 @@ export default function Chargement({ mode = 'auto' }: Props) {
       definirErreur((l_erreur as Error).message);
       return;
     }
-    definirFraction(1);
+    // ── Étape 3 : saison d'affichage ──────────────────────────────────────
+    // .cds local vérifié par /season/check (mobile), /season sinon — repli
+    // saison embarquée sur tout incident (ne bloque JAMAIS la connexion,
+    // cf. services/saison.ts). Lancée AVANT la modal des corrompues : celle-ci
+    // navigue directement vers la fenêtre principale.
+    definirLibelle('saison d\'affichage');
+    definirFraction(0.98);
+    await chargerSaisonAffichage();
+
     // Modal d'avertissement d'abord (OK = unique action), puis fenêtre
     // principale — sinon navigation directe.
     if (corrompues.length > 0) return;

@@ -2,17 +2,24 @@ import { useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import type { ZoneCarte } from '../data/carte';
-import { CARTE_VIEWBOX, CARTE_ZONES } from '../data/carte';
 
 type Props = {
+  // Repère de la saison (fond.largeur/hauteur du season.json — le viewBox
+  // 992×1586 de la saison embarquée, cf. data/carte.ts).
+  viewbox: { largeur: number; hauteur: number };
+  // Zones de la saison : le fond (action null) puis les bâtiments cliquables
+  // — construites par le service saison (embarquée ou .cds).
+  zones: ZoneCarte[];
   onPressZone?: (action: string) => void;
 };
 
-// Reproduit le rendu du SVG source (../img2.svg) : chaque <image> est dessinée dans
-// le repère du viewBox avec le « preserveAspectRatio » par défaut (xMidYMid meet) —
-// donc la carte est mise à l'échelle en entier, centrée, avec des marges égales.
-// Les zones dont la balise d'origine porte un data-action deviennent tatonables.
-export default function CarteInteractive({ onPressZone }: Props) {
+// Reproduit le rendu du SVG source (../img2.svg) — désormais piloté par la
+// saison d'affichage (`.cds` ou saison embarquée, cf. services/saison.ts) :
+// chaque zone est dessinée dans le repère du viewBox avec le
+// « preserveAspectRatio » par défaut (xMidYMid meet) — la carte est mise à
+// l'échelle en entier, centrée, avec des marges égales. Les zones portant une
+// action deviennent tatonables.
+export default function CarteInteractive({ viewbox, zones, onPressZone }: Props) {
   const [taille, setTaille] = useState<{ largeur: number; hauteur: number } | null>(null);
 
   const definirTaille = ({ nativeEvent }: LayoutChangeEvent) =>
@@ -25,11 +32,11 @@ export default function CarteInteractive({ onPressZone }: Props) {
 
   // Mise à l'échelle « xMidYMid meet » du viewBox dans la surface disponible.
   const echelle = Math.min(
-    taille.largeur / CARTE_VIEWBOX.largeur,
-    taille.hauteur / CARTE_VIEWBOX.hauteur,
+    taille.largeur / viewbox.largeur,
+    taille.hauteur / viewbox.hauteur,
   );
-  const decalX = (taille.largeur - CARTE_VIEWBOX.largeur * echelle) / 2;
-  const decalY = (taille.hauteur - CARTE_VIEWBOX.hauteur * echelle) / 2;
+  const decalX = (taille.largeur - viewbox.largeur * echelle) / 2;
+  const decalY = (taille.hauteur - viewbox.hauteur * echelle) / 2;
 
   const geometrie = (zone: ZoneCarte) => ({
     left: decalX + zone.x * echelle,
@@ -40,9 +47,9 @@ export default function CarteInteractive({ onPressZone }: Props) {
 
   return (
     <View style={styles.plein} onLayout={definirTaille}>
-      {/* L'ordre des éléments du tableau est l'ordre de superposition du SVG :
+      {/* L'ordre des zones (fond puis bâtiments) est l'ordre de superposition :
           chaque zone est au-dessus de la précédente, comme dans le SVG d'origine. */}
-      {CARTE_ZONES.map((zone) =>
+      {zones.map((zone) =>
         zone.action ? (
           <Pressable
             key={zone.id}

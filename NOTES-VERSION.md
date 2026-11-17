@@ -6,6 +6,10 @@ courante embarquée dans l'app (`src/data/notes-version.ts`, généré par
 `npm run maj:notes`). Les nouveautés sont suivies à partir de v0.0.8 ; les
 évolutions antérieures ne sont pas listées.
 
+## v0.0.12
+
+- Nouveau : la saison d'affichage (décor de la carte du jeu) est chargée depuis le serveur et mise à jour automatiquement à chaque connexion. Le jeu affiche maintenant le décor de la saison en cours, ses bâtiments et ses détails.
+
 ## v0.0.11
 
 - La collection est vérifiée directement avec le serveur à chaque connexion : les cartes abîmées sur le téléphone sont réparées automatiquement, et les cartes manquantes sont récupérées et contrôlées dès leur téléchargement.

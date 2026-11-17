@@ -2,6 +2,7 @@ import { remplacer } from '../navigation/navigateur';
 import { persistor, store } from '../store/store';
 import { renouvelerRequestToken, seDeconnecter } from '../store/utilisateur';
 import { hacherMotDePasse } from '../utils/hash';
+import { decoderBase64 } from '../utils/base64';
 
 // Client de l'API pyCodebara2 — contrat : 
 // docs/integration-client.md (projet /home/champix/projets/pyCodebara2).
@@ -411,6 +412,54 @@ export async function verifierChecksumCarte(
     datasExtra: { cid: carteId, hash },
   });
   return donnees.isChecksumGood === true;
+}
+
+// ─── Saisons d'affichage (§5.11 – GET /season/check + GET /season) ──────────
+
+// Résultat de /season/check : hash sha256 du .cds de la saison courante
+// (sélection serveur selon date actuelle + pays de la demande) — `appseason`
+// null (ou hash vide) = aucune saison active → client sur sa saison embarquée.
+export type SaisonVerifiee = {
+  appseason: number | null;
+  hash: string | null;
+};
+
+// Compare le hash du .cds LOCAL du client avec la saison courante du serveur.
+// `pays` (champ `country` du header datas, ex. "fr-FR") pilote la sélection —
+// absent, le serveur retombe sur la saison intl. La rotation du token est
+// gérée par appelProtege.
+export async function verifierSaison(hash: string, pays: string | null): Promise<SaisonVerifiee> {
+  const donnees = await appelProtege('/season/check', {
+    datasExtra: { hash, ...(pays ? { country: pays } : {}) },
+  });
+  return {
+    appseason: nombreValeur(donnees, 'appseason'),
+    hash: texteValeur(donnees, 'hash') || null,
+  };
+}
+
+// Télécharge le .cds complet de la saison courante (§5.11, base64 dans la
+// réponse — gros paquet : timeout dédié). null = aucune saison active
+// (appseason vide, pas de champ season) → le client utilise sa saison
+// embarquée dans la build.
+export type SaisonTelechargee = {
+  appseason: number | null;
+  hash: string | null;
+  octets: Uint8Array;
+};
+
+export async function telechargerSaison(pays: string | null): Promise<SaisonTelechargee | null> {
+  const donnees = await appelProtege('/season', {
+    datasExtra: pays ? { country: pays } : {},
+    timeout: 60_000,
+  });
+  const season = texteValeur(donnees, 'season');
+  if (!season) return null;
+  return {
+    appseason: nombreValeur(donnees, 'appseason'),
+    hash: texteValeur(donnees, 'hash') || null,
+    octets: decoderBase64(season),
+  };
 }
 
 // ─── Renommage (§5.7 – PUT /card/name, depuis l'usine) ──────────────────────

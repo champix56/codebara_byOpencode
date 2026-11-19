@@ -29,7 +29,11 @@ export type Fenetre =
   | { nom: 'boutique' }
   | { nom: 'arene' }
   | { nom: 'notes' }
-  | { nom: 'carte'; carteId: number };
+  | { nom: 'carte'; carteId: number }
+  | { nom: 'école' }
+  // Maison d'un ami visitée en lecture seule (cartes chargées en mémoire,
+  // jamais enregistrées localement, aucune action de modification).
+  | { nom: 'maison-visite'; amiId: number; nickname: string };
 
 type Ecouteur = (fenetre: Fenetre) => void;
 

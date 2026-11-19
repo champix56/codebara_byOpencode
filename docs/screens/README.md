@@ -16,6 +16,8 @@ Un fichier Markdown par écran (« fenêtre ») de l'application. Règle constan
 | [mairie.md](./mairie.md) | Mairie — informations personnelles : nickname envoyé au serveur (`PUT /user` §5.10), mot de passe **saisi par l'utilisateur** (masqué + œil, indicateur de niveau, 5 règles) → déconnexion sur 200 | 2026-11-11 |
 | [boutique.md](./boutique.md) | Boutique — fenêtre vierge (retour discret) | 2026-11-11 |
 | [arene.md](./arene.md) | Arène — fenêtre vierge (retour discret) | 2026-11-11 |
+| [ecole.md](./ecole.md) | École — 2 onglets : Recherche (joueurs par début de nickname/mail, `friendStatus` → Ajouter / En attente / Ami, **aucun accès maison**) et Amis (demandes repliables Accepter/Refuser + amis validés → maison visitée) | 2026-11-19 |
+| [maison-visite.md](./maison-visite.md) | Maison visitée (ami validé) — cartes `GET /friend/{id}/cards` décodées **en mémoire**, grille + détail 3D, **lecture seule** (aucun stockage, renommage ni téléchargement) | 2026-11-19 |
 
 ## Format attendu
 

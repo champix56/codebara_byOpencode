@@ -101,12 +101,15 @@ function hashPassword(mail: string, clear: string): string
 |---|---|---|
 | login/pass réussi (`GET /user/auth` avec `mail`+`password`) | les **deux** tokens remplacés + données user | stocker **les deux** |
 | `POST /user` (création) | les deux tokens (première émission) | stocker **les deux** |
-| toute route protégée réussie (`/card/*`, `/season`) | un **nouveau** `API_REQUEST_TOKEN` **dans le corps JSON** de la réponse (champ `API_REQUEST_TOKEN`) | **remplacer** le `API_REQUEST_TOKEN` stocké ; conserver `API_TOKEN` |
+| toute route protégée réussie (`/card/*`, `/season`, `/users`, `/friends`, `/friend/*`) | un **nouveau** `API_REQUEST_TOKEN` **dans le corps JSON** de la réponse (champ `API_REQUEST_TOKEN`) | **remplacer** le `API_REQUEST_TOKEN` stocké ; conserver `API_TOKEN` |
 | erreur applicative (corps `{"message": …}` 400/404) | **pas de données ni de token**, donc pas de renouvellement | **conserver** le dernier token valide (la rotation n'a lieu que si la route se termine en succès complet ; ne pas s'attendre à un token dans une réponse d'erreur) |
+| **exception `/friend/*`** : erreur métier 400/404 (demande déjà existante, amitié déjà validée, « Friend not found »…) | le couple de tokens est **consommé quand même**, et un **nouveau `API_REQUEST_TOKEN` est renvoyé dans le corps d'erreur** (ajout 2026-11-19, cf. §5.13/§5.14) | **stocker le token roté depuis le corps d'erreur avant de relancer l'erreur** — sinon l'appel suivant consommerait un couple déjà utilisé et déconnecterait l'utilisateur |
 | erreur token invalide (routes `/card`, message 400 « Invalid REQUEST TOKEN ») | corps `{"message": "Invalid REQUEST TOKEN"}` | session perdue → déclencher la re-connexion login/pass (sur `/user/auth` l'échec est un 404, cf. §5.2) |
 
 Règle d'or : **le `API_REQUEST_TOKEN` utilisable est toujours celui renvoyé par le dernier
-appel protégé réussi**. Un token périmé ne sert plus jamais.
+appel protégé réussi**. Un token périmé ne sert plus jamais. Seule la famille
+`/friend/*` déroge à la règle « pas de token sur erreur » : son token de
+rotation est valide même dans un corps d'erreur.
 
 Stockage : `EncryptedSharedPreferences`/Keystore sur Android, stockage chiffré côté web.
 Ne jamais journaliser les tokens.
@@ -192,6 +195,12 @@ datas: {"API_TOKEN": "ab12...", "API_REQUEST_TOKEN": "cd34..."}
 | `/card/name` | PUT (renommer) | tokens | **✔ actif** |
 | `/season` | GET (saison d'affichage courante, `.cds` base64) | tokens | **✔ actif** (implémenté 2026-11-17, branche `opencode` du serveur, cf. §5.11) |
 | `/season/check` | GET (hash de la saison courante) | tokens | **✔ actif** (implémenté 2026-11-17, branche `opencode`, cf. §5.11) |
+| `/users?value=…` | GET (recherche de joueurs par début de nickname/mail) | tokens | **✔ actif** (serveur 2026-11-18, **intégré au client dans la fenêtre « école »**, cf. §5.12) |
+| `/friend/request/{id}` | POST (demande / acceptation par POST inverse) | tokens | **✔ actif** (serveur 2026-11-19, intégré au client, cf. §5.13) |
+| `/friend/request/{id}` | DELETE (refus d'une demande reçue) | tokens | **✔ actif** (serveur 2026-11-19, intégré au client, cf. §5.13) |
+| `/friend/requested` | GET (demandes reçues en attente) | tokens | **✔ actif** (serveur 2026-11-19, intégré au client, cf. §5.13) |
+| `/friends` | GET (amis validés, sans limite ni pagination) | tokens | **✔ actif** (serveur 2026-11-19, intégré au client, cf. §5.13) |
+| `/friend/{id}/cards` | GET (cartes d'un ami, maison visitée en lecture seule) | tokens | **✔ actif** (serveur 2026-11-19, intégré au client, cf. §5.14) |
 | `/`, `/favicon.ico`, `*.png`, `*.apk` | GET | non | ✔ (statiques) |
 
 ### 5.1 `POST /user` — création de compte (sans authentification)
@@ -594,6 +603,111 @@ renouvelé présent quand même. Le `.cds` (~5,9 Mo → base64 ~7,8 Mo) : le dé
 base64 redonne un ZIP dont l'archive contient `season.json` + PNG. Le hash sert
 au mobile à comparer avec son `.cds` local (bon → local ; mauvais → télécharger).
 
+### 5.12 `GET /users?value=…` — recherche de joueurs (tokens requis)
+
+Endpoint serveur ajouté le 2026-11-18 (`usersSearchRoute`) et utilisé par la
+fenêtre « école » (`src/ecrans/ecole.tsx`, `src/services/api.ts`). Retrouve les
+comptes dont le **nickname** ou le **mail** **commence** par `value` :
+
+```
+GET /users?value=alex HTTP/1.1
+datas: {"API_TOKEN": "…", "API_REQUEST_TOKEN": "…"}
+```
+
+- `value` : **4 caractères minimum** (contrôlé client et serveur) ; pas d'espace
+  ni de `&`, `=`, `%`, `?`, `#`, `+` — la query string n'est **pas décodée** par le
+  serveur, la valeur est envoyée **telle quelle** (pas d'`encodeURIComponent`).
+- Réponse 200 : `{"users": [{"id": 693, "nickname": "Alex", "mail": "alex@…",
+  "friendStatus": "unknown"}, {"id": 695, "nickname": "Alexis", "mail": "…",
+  "friendStatus": "pending"}, {"id": 698, "nickname": "Alix", "mail": "…",
+  "friendStatus": "friend"}, …], "API_REQUEST_TOKEN": "…nouveau…"}` — rotation
+  du token gérée par `appelProtege`.
+  `friendStatus` (ajout 2026-11-19, jointure sur `friend_request`) vaut :
+  - `unknown` : aucune relation — bouton « Ajouter » actif dans l'onglet Recherche ;
+  - `pending` : demande en cours, **reçue ou envoyée** — bouton « En attente » grisé ;
+  - `friend` : amitié validée — indication « Ami », **aucun bouton**.
+
+  La recherche **ne donne jamais accès à la maison** d'un utilisateur : elle ne
+  sert qu'à envoyer une demande d'ami. Les maisons ne s'ouvrent que depuis
+  l'onglet « Amis » (§5.13/§5.14).
+- **Pertinence** (serveur) : correspondance exacte d'abord (casse/accents ignorés),
+  puis champ le plus court (le préfixe couvre une plus grande part de la valeur),
+  départage par nickname puis `id`. Le client conserve l'ordre reçu et **ne trie
+  pas** : le premier résultat est le plus probable.
+- **Limite : 5 profils affichés**. Le serveur renvoie les 6 plus pertinents
+  (`USER_SEARCH_LIMIT = 6`, valeur relevée le 2026-11-19) ; le client applique
+  son propre garde-fou `.slice(0, 5)` pour rester sur la règle produit des
+  5 résultats maximum. Tableau vide = aucun compte trouvé, pas une erreur.
+- Erreurs : tokens absents/invalides → `400 Invalid REQUEST TOKEN` (session morte,
+  re-connexion centralisée dans `api.ts`) ; `value` absente ou < 4 car. → `400`.
+- Le mail n'est affiché que dans cet écran explicitement « rechercher un joueur »
+  (pas de spam).
+
+### 5.13 `/friend/*` et `/friends` — demandes d'amis (tokens requis)
+
+Ajouté le 2026-11-19 et intégré à l'onglet « Amis » de la fenêtre « école ».
+Les identifiants sont des `user.id`. Cycle de vie :
+
+```
+A POST /friend/request/{B}   → demande en attente (state=0, daterequest)
+B GET  /friend/requested     → voit la demande de A
+B DELETE /friend/request/{A} → REFUS  (la ligne disparaît)
+   — ou —
+B POST /friend/request/{A}   → ACCEPTATION (state=1, dateaccept)
+```
+
+- **Une seule relation par couple** : `POST` en double par le même auteur →
+  `400 Friend request already exists` ; `POST` vers un ami validé →
+  `400 Already friends`.
+- **Pas de route `/accept`** : accepter = poster la demande **inverse**
+  (même appel `POST /friend/request/{id}` que pour une nouvelle demande).
+- **Refuser = `DELETE /friend/request/{idDuDemandeur}`** : ne marche que sur une
+  demande **reçue et en attente** (jamais sur une amitié validée, jamais sur sa
+  propre demande émise).
+- `GET /friend/requested` → `{"requests": [{"id","nickname","mail","daterequest"}, …]}` ;
+  tableau vide `[]` si rien. `daterequest` est au format ISO.
+- `GET /friends` → `{"friends": [{"id","nickname","mail","cardcount"}, …]}` :
+  amis **validés** uniquement, **liste complète** (aucune limite ni pagination),
+  triée par nickname puis id. `cardcount` = nombre de cartes de l'ami en base.
+- Erreurs métier : `400` (demande soi-même, doublon, déjà amis) ou `404`
+  (`Friend request not found`, `User not found`). **Ces réponses contiennent un
+  `API_REQUEST_TOKEN` neuf** (contrairement aux autres routes) : cf. §3.3.
+- Aucune suppression d'amitié (« unfriend ») n'est exposée pour l'instant.
+
+### 5.14 `GET /friend/{id}/cards` — maison d'un ami en lecture seule
+
+Ajouté le 2026-11-19 pour la visite des maisons d'amis **validés** (fenêtre
+`maison-visite` du client). `{id}` est l'id de l'ami donné par `GET /friends`.
+Le serveur vérifie d'abord l'amitié validée du couple — un inconnu ou une
+demande en attente reçoivent **404 `{"message": "Friend not found"}`** (avec
+token roté, §3.3).
+
+```http
+GET /friend/674/cards HTTP/1.1
+datas: {"API_TOKEN": "…", "API_REQUEST_TOKEN": "…"}
+```
+```json
+{"cards": [
+  {"id": 812, "cardHash": "…", "cardpower": 120, "health": 80, "attack": 45,
+   "card": "<base64 du .cdz>"}
+], "API_REQUEST_TOKEN": "…nouveau…"}
+```
+
+- Chaque `card` est le `.cdz` complet en base64 (`cdzDepuisBase64` côté client).
+  Le client le décode **en mémoire uniquement** : `extraireApercu` pour la
+  grille, `ouvrirCdz(octets, cardHash)` pour le détail 3D — **jamais**
+  `enregistrerCarte` / `lireCarteLocale` / `majIndex` (`collection.ts`), jamais
+  `telechargerCarte` (`GET /card/{id}`), jamais `renommerCarte`
+  (`PUT /card/name`). Rien n'est écrit sur l'appareil ; le GC libère les octets
+  à la fermeture de la fenêtre.
+- **Aucune modification côté serveur** : la route est purement sélective — pas
+  de purge des cartes incomplètes (simplement omises de la liste), pas de
+  renommage, aucune écriture en base. Les routes du propriétaire
+  (`PUT /card/name`, purge de `cardFunction.getCardListOfUser`) ne doivent pas
+  être appelées depuis une maison visitée.
+- Le couple d'`API_REQUEST_TOKEN` est vérifié puis roté comme sur les autres
+  routes `/friend/*`, y compris sur l'erreur 404.
+
 ---
 
 ## 6. Cycle de vie client d'une carte (recette complète)
@@ -928,6 +1042,15 @@ reste du tirage est identique par construction (déterminisme de la saison).
       `SHA256(mail_final + clair)` ; changer le mail ⇒ nouveau password obligatoire
 - [ ] Intégrer `PUT /card/name` avec garde-fou anti tar.xz (§5.7)
 - [ ] `GET /season` : parsing opportuniste, layout par défaut si absent
+- [ ] Fenêtre « école » : onglet Recherche (`GET /users`, `friendStatus` →
+      Ajouter / En attente / Ami, **aucun accès maison**) + onglet Amis (§5.12/§5.13)
+- [ ] Amis : demandes repliables (accepter = POST inverse, refus = DELETE du
+      demandeur), liste des amis validés cliquable → maison visitée (§5.13)
+- [ ] Rotation du token **sur les erreurs `/friend/*`** aussi (§3.3) : lire
+      `API_REQUEST_TOKEN` dans le corps d'erreur et le stocker
+- [ ] Maison visitée : `GET /friend/{id}/cards`, `.cdz` décodés **en mémoire
+      seulement** (aucun appel à `collection.ts`, `GET /card/{id}` ou
+      `PUT /card/name`) — lecture seule (§5.14)
 - [ ] Tests de recette : §8.1 (curl) reproductibles + intégration app
 
 ---
@@ -941,7 +1064,10 @@ reste du tirage est identique par construction (déterminisme de la saison).
 | 2026-10-30 | Nouveau `POST /user/renew-password` (mot de passe oublié) ; `POST /user` refuse mail mal formé ou compte existant avec **403 Forbidden** ; colonne `user.last_action` (DATETIME, ON UPDATE) — cf. §5.9 |
 | 2026-10-30 | **Envoi des mails systématique, même en `DEBUG=True`** (fin de l'ancien comportement « pas d'envoi en DEBUG ») ; en DEBUG le mot de passe reste en outre imprimé dans le log serveur |
 | 2026-10-30 | Nouveau `PUT /user` (« mairie ») : maj nickname/mail/password via tokens ; règle de mot de passe (majuscule + minuscule + spécial + ≥7 car.) appliquée **côté client**, mot de passe envoyé `SHA256(mail_final + clair)` hexa min. 64 ; changement de mail ⇒ password requis — cf. §5.10 |
-| à venir | `GET /user`, `GET /season/check`, mode génération asynchrone, tables de sécurité anti-rejeu, HTTPS |
+| 2026-11-19 | **`GET /users?value=` intégré au client** (fenêtre « école ») : recherche par début de nickname ou de mail, **4 car. minimum**, **5 résultats max** affichés (serveur `USER_SEARCH_LIMIT = 6` relevé depuis), triés par pertinence ; suppression de la liste fictive affichée jusque-là — cf. §5.12 |
+| 2026-11-19 | **Système d'amis intégré** (onglets de l'école) : `POST`/`DELETE /friend/request/{id}`, `GET /friend/requested`, `GET /friends`, `friendStatus` sur `/users` ; token roté même sur erreur métier — cf. §3.3 et §5.13 |
+| 2026-11-19 | **`GET /friend/{id}/cards`** : maison d'un ami validé en **lecture seule**, cartes en base64 décodées en mémoire, sans stockage local ni modification (§5.14) |
+| à venir | `GET /user`, mode génération asynchrone, tables de sécurité anti-rejeu, HTTPS |
 
 ---
 

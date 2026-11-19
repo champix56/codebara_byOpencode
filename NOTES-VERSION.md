@@ -6,6 +6,11 @@ courante embarquée dans l'app (`src/data/notes-version.ts`, généré par
 `npm run maj:notes`). Les nouveautés sont suivies à partir de v0.0.8 ; les
 évolutions antérieures ne sont pas listées.
 
+## v0.0.13
+
+- L'école s'ouvre sur deux onglets : la recherche de joueurs (ajouter un ami, demande en attente ou déjà ami) et la liste des amis, avec les demandes reçues à accepter ou à refuser.
+- Clique sur un ami pour visiter sa maison et regarder ses cartes en grand. La visite est en lecture seule : aucune carte de ton ami ne peut être modifiée.
+
 ## v0.0.12
 
 - Nouveau : la saison d'affichage (décor de la carte du jeu) est chargée depuis le serveur et mise à jour automatiquement à chaque connexion. Le jeu affiche maintenant le décor de la saison en cours, ses bâtiments et ses détails.

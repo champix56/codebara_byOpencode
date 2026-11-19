@@ -1,14 +1,21 @@
 // GÉNÉRÉ par scripts/maj-notes-version.mjs — NE PAS ÉDITER À LA MAIN.
 // Source maintenue : NOTES-VERSION.md (racine) — npm run maj:notes après édition.
 // VERSION_APPLI = première section du md (la plus récente) ; affichée en jeu
-// sous le bandeau publicitaire (« CodEbara v0.0.12 ») et
+// sous le bandeau publicitaire (« CodEbara v0.0.13 ») et
 // consommée par la fenêtre notes de version.
 
-export const VERSION_APPLI = '0.0.12';
+export const VERSION_APPLI = '0.0.13';
 
 export type NoteVersion = { version: string; lignes: string[] };
 
 export const NOTES_VERSION: NoteVersion[] = [
+  {
+    "version": "v0.0.13",
+    "lignes": [
+      "L'école s'ouvre sur deux onglets : la recherche de joueurs (ajouter un ami, demande en attente ou déjà ami) et la liste des amis, avec les demandes reçues à accepter ou à refuser.",
+      "Clique sur un ami pour visiter sa maison et regarder ses cartes en grand. La visite est en lecture seule : aucune carte de ton ami ne peut être modifiée."
+    ]
+  },
   {
     "version": "v0.0.12",
     "lignes": [

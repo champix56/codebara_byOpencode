@@ -16,7 +16,9 @@ import CarteDetail from './src/components/carte-detail';
 import EnteteEcran from './src/components/entete-ecran';
 import FenetreVierge from './src/components/fenetre-vierge';
 import MaisonEcran from './src/components/maison-ecran';
+import MaisonVisiteEcran from './src/components/maison-visite-ecran';
 import MairieEcran from './src/components/mairie-ecran';
+import Ecole from './src/ecrans/ecole';
 import NotesVersion from './src/components/notes-version';
 import UsineEcran from './src/components/usine-ecran';
 import Chargement from './src/ecrans/chargement';
@@ -102,6 +104,20 @@ function rendreFenetre(fenetre: Fenetre): ReactNode {
       return (
         <FenetreAvecEntete titre="Notes de version">
           <NotesVersion />
+        </FenetreAvecEntete>
+      );
+    case 'école':
+      return (
+        <FenetreAvecEntete titre="École">
+          <Ecole />
+        </FenetreAvecEntete>
+      );
+    case 'maison-visite':
+      // Maison d'un ami validé, en lecture seule : aucun bouton de réglage,
+      // aucune écriture locale ou serveur (cf. maison-visite-ecran.tsx).
+      return (
+        <FenetreAvecEntete titre={`Maison de ${fenetre.nickname} (visite)`}>
+          <MaisonVisiteEcran amiId={fenetre.amiId} nickname={fenetre.nickname} />
         </FenetreAvecEntete>
       );
   }

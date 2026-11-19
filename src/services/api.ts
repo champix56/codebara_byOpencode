@@ -30,9 +30,15 @@ export class ErreurSession extends Error {
 }
 
 export class ErreurApi extends Error {
-  constructor(message: string) {
+  // Les routes /friend/* renvoient un API_REQUEST_TOKEN neuf MÊME sur une
+  // erreur métier (400/404, §5.12 serveur) : il doit être stocké pour que
+  // l'appel suivant ne consomme pas un couple déjà utilisé.
+  readonly tokenRotate: string | null;
+
+  constructor(message: string, tokenRotate: string | null = null) {
     super(message);
     this.name = 'ErreurApi';
+    this.tokenRotate = tokenRotate;
   }
 }
 
@@ -53,18 +59,30 @@ async function lireJson(reponse: Response): Promise<Record<string, unknown>> {
   // (§4). Un échec réseau (TypeError fetch) remonte tel quel.
   if (!reponse.ok) {
     const texte = await reponse.text();
-    let message = texte;
+    let corps: Record<string, unknown> | null = null;
     try {
-      message = (JSON.parse(texte) as { message?: string }).message || texte;
+      const parsed: unknown = JSON.parse(texte);
+      if (typeof parsed === 'object' && parsed !== null) {
+        corps = parsed as Record<string, unknown>;
+      }
     } catch {
       // Corps non JSON : garder le texte brut.
     }
-    if (typeof message !== 'string') {
+    let message: string;
+    if (typeof corps?.message === 'string') {
+      message = corps.message;
+    } else if (corps !== null && 'message' in corps) {
       // ex. HTTP 500 {"message": null} à la création d'un compte existant
       // (contrat §5.1). La chaîne exacte sert à creerCompte.
       message = 'Erreur serveur inconnue';
+    } else {
+      // Corps non JSON : garder le texte brut.
+      message = texte;
     }
-    throw new ErreurApi(message);
+    const tokenRotate = typeof corps?.API_REQUEST_TOKEN === 'string'
+      ? corps.API_REQUEST_TOKEN as string
+      : null;
+    throw new ErreurApi(message, tokenRotate);
   }
   return (await reponse.json()) as Record<string, unknown>;
 }
@@ -136,8 +154,12 @@ async function appelProtege(
   chemin: string,
   options: { method?: string; corps?: Record<string, unknown>; datasExtra?: Record<string, unknown>; timeout?: number } = {},
 ): Promise<Record<string, unknown>> {
-  try {
-    return await enFile(async () => {
+  // Tout le traitement (y compris la rotation et la gestion de session) vit
+  // DANS la tâche sérialisée : le token stocké est donc toujours à jour avant
+  // que l'appel suivant de la file ne lise le store (utile quand l'onglet Amis
+  // enchaîne demandes + amis + cartes).
+  return enFile(async () => {
+    try {
       const tokens = store.getState().utilisateur;
       if (!tokens.apiToken || !tokens.requestToken) {
         throw new ErreurApi('Aucune session : authentification serveur requise');
@@ -164,16 +186,22 @@ async function appelProtege(
         store.dispatch(renouvelerRequestToken(nouveauToken));
       }
       return donnees;
-    });
-  } catch (erreur) {
-    if (erreur instanceof ErreurApi && estErreurSession(erreur.message)) {
-      // Session morte (couple de tokens consommé) : reset persistant de la
-      // tranche + retour connexion — centralisé pour toute l'app.
-      quitterSession();
-      throw new ErreurSession();
+    } catch (erreur) {
+      if (erreur instanceof ErreurApi && estErreurSession(erreur.message)) {
+        // Session morte (couple de tokens consommé) : reset persistant de la
+        // tranche + retour connexion — centralisé pour toute l'app.
+        quitterSession();
+        throw new ErreurSession();
+      }
+      // Erreur métier /friend/* : le serveur a déjà consommé le couple de tokens
+      // et en renvoie un neuf dans le corps (§5.13) — le stocker avant de
+      // relancer l'erreur à l'écran. Les autres routes ne le font pas (§3.3).
+      if (erreur instanceof ErreurApi && erreur.tokenRotate) {
+        store.dispatch(renouvelerRequestToken(erreur.tokenRotate));
+      }
+      throw erreur;
     }
-    throw erreur;
-  }
+  });
 }
 
 // Reconnaissance d'erreur par sous-chaîne (contrat §4 : jamais la phrase entière).
@@ -301,6 +329,144 @@ export async function modifierUtilisateurServeur(
   }
   const reponse = await appelProtege('/user', { method: 'PUT', corps });
   return lireUtilisateur(reponse);
+}
+
+// ─── Recherche d'utilisateurs (§5.12 — GET /users?value=, tokens requis) ────
+
+// État de la relation avec le compte connecté (§5.11 serveur) : pilote le
+// bouton d'action de la recherche (« ajouter », « en attente », « ami »).
+export type StatutAmi = 'unknown' | 'pending' | 'friend';
+
+// Profil minimal renvoyé par GET /users (le mail ne sert qu'à l'écran « école »).
+export type UtilisateurTrouve = {
+  id: number;
+  nickname: string;
+  mail: string;
+  friendStatus: StatutAmi;
+};
+
+// Garde-fou client : le serveur renvoie déjà les 5 plus pertinents, on tronque
+// aussi ici au cas où un ancien serveur renverrait une liste plus longue.
+const LIMITE_RECHERCHE_UTILISATEURS = 5;
+
+export const LONGUEUR_MIN_RECHERCHE_UTILISATEUR = 4;
+
+// La query string n'est PAS décodée par le serveur (doc serveur §5.11, client
+// §5.12) : on refuse les caractères qui casseraient la requête ou altéreraient
+// le préfixe.
+export const CARACTERES_INTERDITS_RECHERCHE = /[\s&=%?#+]/u;
+
+export async function rechercherUtilisateurs(value: string): Promise<UtilisateurTrouve[]> {
+  const prefixe = value.trim();
+  if (prefixe.length < LONGUEUR_MIN_RECHERCHE_UTILISATEUR) {
+    throw new ErreurApi('Saisissez au moins 4 caractères pour rechercher un joueur');
+  }
+  if (CARACTERES_INTERDITS_RECHERCHE.test(prefixe)) {
+    throw new ErreurApi('La recherche ne doit contenir ni espace ni caractère spécial (& = % ? # +)');
+  }
+  // Valeur envoyée telle quelle, sans encodage URL (le serveur ne décode pas).
+  const donnees = await appelProtege(`/users?value=${prefixe}`);
+  const brut = Array.isArray(donnees.users) ? donnees.users : [];
+  return brut
+    .filter((v): v is Record<string, unknown> => typeof v === 'object' && v !== null)
+    .map((utilisateur) => ({
+      id: Number(utilisateur.id),
+      nickname: texteValeur(utilisateur, 'nickname'),
+      mail: texteValeur(utilisateur, 'mail'),
+      friendStatus: lireStatutAmi(utilisateur.friendStatus),
+    }))
+    .filter((utilisateur) => Number.isInteger(utilisateur.id) && utilisateur.id > 0)
+    .slice(0, LIMITE_RECHERCHE_UTILISATEURS);
+}
+
+function lireStatutAmi(valeur: unknown): StatutAmi {
+  return valeur === 'friend' || valeur === 'pending' ? valeur : 'unknown';
+}
+
+// ─── Amis (§5.12 serveur — /friend/*, /friends, tokens requis) ──────────────
+
+export type DemandeAmi = {
+  id: number;
+  nickname: string;
+  mail: string;
+  daterequest: string | null;
+};
+
+export type Ami = {
+  id: number;
+  nickname: string;
+  mail: string;
+  cardcount: number;
+};
+
+export type CarteAmi = {
+  id: number;
+  cardHash: string | null;
+  cardpower: number | null;
+  health: number | null;
+  attack: number | null;
+  /** .cdz complet en base64 — décodé EN MÉMOIRE, jamais enregistré localement. */
+  cardBase64: string;
+};
+
+function lireListeAmis(brut: unknown): Ami[] {
+  return (Array.isArray(brut) ? brut : [])
+    .filter((v): v is Record<string, unknown> => typeof v === 'object' && v !== null)
+    .map((v) => ({
+      id: Number(v.id),
+      nickname: texteValeur(v, 'nickname'),
+      mail: texteValeur(v, 'mail'),
+      cardcount: typeof v.cardcount === 'number' ? v.cardcount : 0,
+    }))
+    .filter((ami) => Number.isInteger(ami.id) && ami.id > 0);
+}
+
+/** Demandes reçues en attente — `GET /friend/requested`. */
+export async function listerDemandesAmis(): Promise<DemandeAmi[]> {
+  const donnees = await appelProtege('/friend/requested');
+  return (Array.isArray(donnees.requests) ? donnees.requests : [])
+    .filter((v): v is Record<string, unknown> => typeof v === 'object' && v !== null)
+    .map((v) => ({
+      id: Number(v.id),
+      nickname: texteValeur(v, 'nickname'),
+      mail: texteValeur(v, 'mail'),
+      daterequest: typeof v.daterequest === 'string' ? v.daterequest : null,
+    }))
+    .filter((demande) => Number.isInteger(demande.id) && demande.id > 0);
+}
+
+/** Amis validés — `GET /friends` (liste complète, sans limite ni pagination). */
+export async function listerAmis(): Promise<Ami[]> {
+  return lireListeAmis((await appelProtege('/friends')).friends);
+}
+
+/**
+ * Envoie une demande (`POST /friend/request/{id}`). Si la demande inverse est
+ * en attente, LE MÊME APPEL vaut acceptation (§5.12) — pas de route /accept.
+ */
+export async function envoyerDemandeAmi(id: number): Promise<void> {
+  await appelProtege(`/friend/request/${id}`, { method: 'POST' });
+}
+
+/** Refuse une demande reçue (`DELETE /friend/request/{idDuDemandeur}`). */
+export async function refuserDemandeAmi(id: number): Promise<void> {
+  await appelProtege(`/friend/request/${id}`, { method: 'DELETE' });
+}
+
+/** Cartes d'un ami pour une maison visitée — `GET /friend/{id}/cards` (lecture seule). */
+export async function listerCartesAmi(idAmi: number): Promise<CarteAmi[]> {
+  const donnees = await appelProtege(`/friend/${idAmi}/cards`);
+  return (Array.isArray(donnees.cards) ? donnees.cards : [])
+    .filter((v): v is Record<string, unknown> => typeof v === 'object' && v !== null)
+    .map((v) => ({
+      id: Number(v.id),
+      cardHash: typeof v.cardHash === 'string' ? v.cardHash : null,
+      cardpower: nombreValeur(v, 'cardpower'),
+      health: nombreValeur(v, 'health'),
+      attack: nombreValeur(v, 'attack'),
+      cardBase64: texteValeur(v, 'card'),
+    }))
+    .filter((carte) => Number.isInteger(carte.id) && carte.id > 0 && carte.cardBase64.length > 0);
 }
 
 // ─── Cartes (§5.4 – GET /card : liste de l'utilisateur connecté) ────────────

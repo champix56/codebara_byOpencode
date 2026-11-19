@@ -13,6 +13,7 @@ const DESTINATIONS: { fenetre: Fenetre; libelle: string }[] = [
   { fenetre: { nom: 'mairie' }, libelle: 'Mairie' },
   { fenetre: { nom: 'boutique' }, libelle: 'Boutique' },
   { fenetre: { nom: 'arene' }, libelle: 'Arène' },
+  { fenetre: { nom: 'école' }, libelle: 'École' },
 ];
 
 const LARGEUR_MENU = 280;

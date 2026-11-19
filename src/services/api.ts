@@ -17,6 +17,11 @@ const URL_BASE = process.env.EXPO_PUBLIC_SERVER_URL ?? 'http://localhost:8080';
 // ~1–2 min, §5.3) — timeout dédié bien plus généreux.
 const DELAI_APP_MS = 10_000;
 const DELAI_GENERATION_MS = 150_000;
+// `GET /friend/{iduser}/cards/{idcard}` renvoie un seul .cdz en base64 (≈1,9 Mo)
+// et succède à la liste légère `GET /friend/{id}/cards`. Le transfert d'une
+// archive peut dépasser le délai standard de 10 s : délai dédié, sans écriture
+// locale — cf. maison-visite-ecran.tsx.
+const DELAI_CARTE_AMI_MS = 120_000;
 
 // Erreurs distinguées par le reste de l'app :
 // - ErreurSession : couple de tokens consommé (« Invalid REQUEST TOKEN ») →
@@ -103,6 +108,9 @@ async function avecDelai(
     return await lireJson(reponse);
   } catch (erreur) {
     if (erreur instanceof ErreurApi || erreur instanceof ErreurSession) throw erreur;
+    if (erreur instanceof Error && erreur.name === 'AbortError') {
+      throw new ErreurApi(`Le serveur met trop de temps à répondre (${URL_BASE}) — réessaie.`);
+    }
     throw new ErreurApi(`Serveur injoignable (${URL_BASE})`);
   } finally {
     clearTimeout(minuteur);
@@ -399,12 +407,17 @@ export type Ami = {
   cardcount: number;
 };
 
+/** Métadonnée d'une carte de la liste `GET /friend/{id}/cards` (sans archive). */
 export type CarteAmi = {
   id: number;
   cardHash: string | null;
   cardpower: number | null;
   health: number | null;
   attack: number | null;
+};
+
+/** Carte unitaire `GET /friend/{iduser}/cards/{idcard}` : archive incluse. */
+export type CarteAmiChargee = CarteAmi & {
   /** .cdz complet en base64 — décodé EN MÉMOIRE, jamais enregistré localement. */
   cardBase64: string;
 };
@@ -453,7 +466,11 @@ export async function refuserDemandeAmi(id: number): Promise<void> {
   await appelProtege(`/friend/request/${id}`, { method: 'DELETE' });
 }
 
-/** Cartes d'un ami pour une maison visitée — `GET /friend/{id}/cards` (lecture seule). */
+/**
+ * Liste des cartes d'un ami — `GET /friend/{id}/cards` (lecture seule).
+ * Réponse légère : métadonnées seules, sans `.cdz`. Le client enchaîne ensuite
+ * les appels `recupererCarteAmi`, un par carte de cette liste.
+ */
 export async function listerCartesAmi(idAmi: number): Promise<CarteAmi[]> {
   const donnees = await appelProtege(`/friend/${idAmi}/cards`);
   return (Array.isArray(donnees.cards) ? donnees.cards : [])
@@ -464,9 +481,39 @@ export async function listerCartesAmi(idAmi: number): Promise<CarteAmi[]> {
       cardpower: nombreValeur(v, 'cardpower'),
       health: nombreValeur(v, 'health'),
       attack: nombreValeur(v, 'attack'),
-      cardBase64: texteValeur(v, 'card'),
     }))
-    .filter((carte) => Number.isInteger(carte.id) && carte.id > 0 && carte.cardBase64.length > 0);
+    .filter((carte) => Number.isInteger(carte.id) && carte.id > 0);
+}
+
+/**
+ * Une carte de la liste — `GET /friend/{iduser}/cards/{idcard}` (lecture seule).
+ * Le serveur vérifie l'amitié validée ET que la carte appartient bien à
+ * `idAmi` ; sinon erreur 404 avec token roté (géré par `appelProtege`).
+ */
+export async function recupererCarteAmi(
+  idAmi: number,
+  idCarte: number,
+): Promise<CarteAmiChargee> {
+  const donnees = await appelProtege(`/friend/${idAmi}/cards/${idCarte}`, {
+    timeout: DELAI_CARTE_AMI_MS,
+  });
+  const carte = donnees.card;
+  if (typeof carte !== 'object' || carte === null) {
+    throw new ErreurApi('Réponse carte d’ami inattendue du serveur');
+  }
+  const source = carte as Record<string, unknown>;
+  const cardBase64 = texteValeur(source, 'card');
+  if (!cardBase64) {
+    throw new ErreurApi('Réponse carte d’ami inattendue du serveur (fichier .cdz absente)');
+  }
+  return {
+    id: nombreValeur(source, 'id') ?? idCarte,
+    cardHash: typeof source.cardHash === 'string' ? source.cardHash : null,
+    cardpower: nombreValeur(source, 'cardpower'),
+    health: nombreValeur(source, 'health'),
+    attack: nombreValeur(source, 'attack'),
+    cardBase64,
+  };
 }
 
 // ─── Cartes (§5.4 – GET /card : liste de l'utilisateur connecté) ────────────

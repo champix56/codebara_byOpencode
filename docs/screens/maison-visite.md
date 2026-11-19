@@ -2,16 +2,23 @@
 
 ## Rôle
 
-Afficher la maison d'un **ami validé** sans jamais la modifier. Les cartes sont
-chargées depuis `GET /friend/{id}/cards` (contrat serveur §5.14) et décodées
-**en mémoire uniquement** : aucun fichier local, aucun renommage, aucune écriture
-côté serveur. Le serveur refuse l'accès aux inconnus et aux demandes en attente
-(404 « Friend not found »).
+Afficher la maison d'un **ami validé** sans jamais la modifier. Le chargement se
+fait en deux temps (contrat serveur §5.14) : `GET /friend/{id}/cards` renvoie la
+**liste des cartes** (métadonnées seules), puis
+`GET /friend/{iduser}/cards/{idcard}` renvoie **chaque carte de la liste**, une
+par une, avec son `.cdz`. Le serveur vérifie l'amitié validée ET que la carte
+appartient bien à l'ami. Les archives sont décodées **en mémoire uniquement** :
+aucun fichier local, aucun renommage, aucune écriture côté serveur.
 
 ## Structure visuelle
 
 - En-tête commun `EnteteEcran` : titre « Maison de <nickname> (visite) » +
   chevron de retour (ajouté par `App.tsx`).
+- **Modal de chargement** (plein écran, fond translucide) tant que la maison se
+  remplit : `ActivityIndicator`, titre « Chargement de la maison de
+  <nickname> », état « Récupération de la liste des cartes… » puis « Carte 3 sur
+  12 chargées… », barre de progression et rappel « Lecture seule — aucune carte
+  n'est enregistrée sur l'appareil. »
 - Banderole « Maison de <nickname> » avec rappel « Visite en lecture seule —
   aucune carte ne peut être modifiée. »
 - Grille d'aperçus (3 colonnes en natif, 4 sur le web) : image `front.png` +
@@ -26,10 +33,12 @@ côté serveur. Le serveur refuse l'accès aux inconnus et aux demandes en atten
 
 | État | Affichage |
 | --- | --- |
-| Chargement | « Chargement des cartes de <nickname>… » |
+| Liste en cours | Modal : « Récupération de la liste des cartes… » |
+| Cartes en cours | Modal : « Carte N sur Total chargées… » + barre de progression |
 | Liste vide | « <nickname> n'a pas encore de carte. » |
 | 200 avec cartes | Grille d'aperçus (décodage séquentiel, une archive à la fois) |
 | Erreur API / réseau / 404 Friend not found | Message d'erreur + bouton « Réessayer » |
+| Une carte unitaire échoue | Les autres cartes chargent quand même ; message sous la grille avec les `#id` en échec |
 | Détail en cours | Visuel 3D + stats en lecture seule ; retour à la grille |
 | Archive corrompue au détail | Message d'erreur (contrôle `sha256 == cardHash` §6.3) |
 | Session morte | Redirection connexion gérée dans `api.ts` |
@@ -50,6 +59,10 @@ côté serveur. Le serveur refuse l'accès aux inconnus et aux demandes en atten
 
 - `src/components/maison-visite-ecran.tsx` reçoit `amiId` et `nickname` portés
   par la fenêtre (type `Fenetre` dans `src/navigation/navigateur.ts`).
+- `listerCartesAmi` lit la liste légère ; `recupererCarteAmi` est appelé en série
+  pour chaque `id` reçu. Les appels protégés sont sérialisés dans `api.ts` (token
+  rotatif à usage unique), et le token renvoyé sur erreur `/friend/*` y est
+  stocké avant de relancer l'erreur.
 - **Interdit dans ce composant** : `lireCarteLocale`, `enregistrerCarte`,
   `majIndex` (`services/collection.ts`), `telechargerCarte` (`GET /card/{id}`),
   `renommerCarte` / `PUT /card/name`, et toute purge de cartes cassées. Les
@@ -58,5 +71,8 @@ côté serveur. Le serveur refuse l'accès aux inconnus et aux demandes en atten
 - `extraireApercu` (grille) saute les contrôles d'intégrité coûteux ;
   `ouvrirCdz(octets, cardHash)` (détail) valide le sha256 global et
   `hashs.json` **sur les octets déjà reçus** — aucun second appel réseau.
+- Le timeout dédié de **120 s** ne s'applique qu'à la récupération d'une archive
+  unitaire (≈1,9 Mo en base64) ; la liste, très légère, utilise le délai
+  standard de 10 s.
 - Le serveur ne purge rien non plus : une carte incomplète est omise de la
-  réponse, pas détruite.
+  réponse, pas détruite. Aucune incrémentation de version pour cette évolution.

@@ -200,7 +200,8 @@ datas: {"API_TOKEN": "ab12...", "API_REQUEST_TOKEN": "cd34..."}
 | `/friend/request/{id}` | DELETE (refus d'une demande reçue) | tokens | **✔ actif** (serveur 2026-11-19, intégré au client, cf. §5.13) |
 | `/friend/requested` | GET (demandes reçues en attente) | tokens | **✔ actif** (serveur 2026-11-19, intégré au client, cf. §5.13) |
 | `/friends` | GET (amis validés, sans limite ni pagination) | tokens | **✔ actif** (serveur 2026-11-19, intégré au client, cf. §5.13) |
-| `/friend/{id}/cards` | GET (cartes d'un ami, maison visitée en lecture seule) | tokens | **✔ actif** (serveur 2026-11-19, intégré au client, cf. §5.14) |
+| `/friend/{id}/cards` | GET (liste des cartes d'un ami, sans archive) | tokens | **✔ actif** (serveur 2026-11-19, intégré au client, cf. §5.14) |
+| `/friend/{iduser}/cards/{idcard}` | GET (une carte de la liste, `.cdz` inclus) | tokens | **✔ actif** (serveur 2026-11-19, intégré au client, cf. §5.14) |
 | `/`, `/favicon.ico`, `*.png`, `*.apk` | GET | non | ✔ (statiques) |
 
 ### 5.1 `POST /user` — création de compte (sans authentification)
@@ -674,13 +675,15 @@ B POST /friend/request/{A}   → ACCEPTATION (state=1, dateaccept)
   `API_REQUEST_TOKEN` neuf** (contrairement aux autres routes) : cf. §3.3.
 - Aucune suppression d'amitié (« unfriend ») n'est exposée pour l'instant.
 
-### 5.14 `GET /friend/{id}/cards` — maison d'un ami en lecture seule
+### 5.14 Maison d'un ami en lecture seule — liste puis cartes unitaires
 
 Ajouté le 2026-11-19 pour la visite des maisons d'amis **validés** (fenêtre
-`maison-visite` du client). `{id}` est l'id de l'ami donné par `GET /friends`.
-Le serveur vérifie d'abord l'amitié validée du couple — un inconnu ou une
-demande en attente reçoivent **404 `{"message": "Friend not found"}`** (avec
-token roté, §3.3).
+`maison-visite` du client). `{id}` / `{iduser}` est l'id de l'ami donné par
+`GET /friends`. Le serveur vérifie d'abord l'amitié validée du couple — un
+inconnu ou une demande en attente reçoivent **404 `{"message": "Friend not
+found"}`** (avec token roté, §3.3).
+
+**1. Liste légère** — `GET /friend/{id}/cards` :
 
 ```http
 GET /friend/674/cards HTTP/1.1
@@ -688,25 +691,49 @@ datas: {"API_TOKEN": "…", "API_REQUEST_TOKEN": "…"}
 ```
 ```json
 {"cards": [
-  {"id": 812, "cardHash": "…", "cardpower": 120, "health": 80, "attack": 45,
-   "card": "<base64 du .cdz>"}
+  {"id": 812, "cardHash": "…", "cardpower": 120, "health": 80, "attack": 45}
 ], "API_REQUEST_TOKEN": "…nouveau…"}
 ```
 
-- Chaque `card` est le `.cdz` complet en base64 (`cdzDepuisBase64` côté client).
-  Le client le décode **en mémoire uniquement** : `extraireApercu` pour la
-  grille, `ouvrirCdz(octets, cardHash)` pour le détail 3D — **jamais**
-  `enregistrerCarte` / `lireCarteLocale` / `majIndex` (`collection.ts`), jamais
-  `telechargerCarte` (`GET /card/{id}`), jamais `renommerCarte`
-  (`PUT /card/name`). Rien n'est écrit sur l'appareil ; le GC libère les octets
-  à la fermeture de la fenêtre.
-- **Aucune modification côté serveur** : la route est purement sélective — pas
-  de purge des cartes incomplètes (simplement omises de la liste), pas de
+Aucun `.cdz` dans cette réponse : elle ne sert qu'à énumérer les `id` de la
+maison. `listerCartesAmi` (api.ts) ne garde que les métadonnées.
+
+**2. Une carte par id de la liste** — `GET /friend/{iduser}/cards/{idcard}` :
+
+```http
+GET /friend/674/cards/812 HTTP/1.1
+datas: {"API_TOKEN": "…", "API_REQUEST_TOKEN": "…"}
+```
+```json
+{"card": {
+  "id": 812, "cardHash": "…", "cardpower": 120, "health": 80, "attack": 45,
+  "card": "<base64 du .cdz>"
+}, "API_REQUEST_TOKEN": "…nouveau…"}
+```
+
+Le serveur contrôle **l'amitié validée** avec `{iduser}` **et**
+**l'appartenance de la carte à `{iduser}`** (`ownerid` en SQL + `id` demandé) :
+sinon 404 `{"message": "Friend not found"}` ou `{"message": "Card not found"}`
+(avec token roté). `recupererCarteAmi` (api.ts) est appelé en série pour
+**chaque carte de la liste** ; `maison-visite-ecran.tsx` affiche pendant ce
+temps une **modal de progression** (« Carte 3 sur 12… » + barre d'avancement).
+Une carte en échec est signalée sous la grille, sans bloquer les suivantes.
+
+- Chaque `card` est le `.cdz` complet en base64 (~1,9 Mo), avec un **timeout
+  dédié de 120 s** (contre 10 s par défaut) : le client le décode **en mémoire
+  uniquement** (`extraireApercu` grille, `ouvrirCdz(octets, cardHash)` détail) —
+  **jamais** `enregistrerCarte` / `lireCarteLocale` / `majIndex`
+  (`collection.ts`), jamais `telechargerCarte` (`GET /card/{id}`), jamais
+  `renommerCarte` (`PUT /card/name`). Rien n'est écrit sur l'appareil ; le GC
+  libère les octets à la fermeture de la fenêtre.
+- **Aucune modification côté serveur** : les routes sont purement sélectives —
+  pas de purge des cartes incomplètes (simplement omises de la liste), pas de
   renommage, aucune écriture en base. Les routes du propriétaire
   (`PUT /card/name`, purge de `cardFunction.getCardListOfUser`) ne doivent pas
   être appelées depuis une maison visitée.
 - Le couple d'`API_REQUEST_TOKEN` est vérifié puis roté comme sur les autres
-  routes `/friend/*`, y compris sur l'erreur 404.
+  routes `/friend/*`, **y compris sur toutes les erreurs** (métier ou
+  inattendue) tant que les tokens présentés étaient valides.
 
 ---
 
@@ -1048,9 +1075,10 @@ reste du tirage est identique par construction (déterminisme de la saison).
       demandeur), liste des amis validés cliquable → maison visitée (§5.13)
 - [ ] Rotation du token **sur les erreurs `/friend/*`** aussi (§3.3) : lire
       `API_REQUEST_TOKEN` dans le corps d'erreur et le stocker
-- [ ] Maison visitée : `GET /friend/{id}/cards`, `.cdz` décodés **en mémoire
-      seulement** (aucun appel à `collection.ts`, `GET /card/{id}` ou
-      `PUT /card/name`) — lecture seule (§5.14)
+- [ ] Maison visitée : `GET /friend/{id}/cards` (liste) puis
+      `GET /friend/{iduser}/cards/{idcard}` pour chaque carte, modal de
+      progression, `.cdz` décodés **en mémoire seulement** (aucun appel à
+      `collection.ts`, `GET /card/{id}` ou `PUT /card/name`) — lecture seule (§5.14)
 - [ ] Tests de recette : §8.1 (curl) reproductibles + intégration app
 
 ---
@@ -1067,6 +1095,7 @@ reste du tirage est identique par construction (déterminisme de la saison).
 | 2026-11-19 | **`GET /users?value=` intégré au client** (fenêtre « école ») : recherche par début de nickname ou de mail, **4 car. minimum**, **5 résultats max** affichés (serveur `USER_SEARCH_LIMIT = 6` relevé depuis), triés par pertinence ; suppression de la liste fictive affichée jusque-là — cf. §5.12 |
 | 2026-11-19 | **Système d'amis intégré** (onglets de l'école) : `POST`/`DELETE /friend/request/{id}`, `GET /friend/requested`, `GET /friends`, `friendStatus` sur `/users` ; token roté même sur erreur métier — cf. §3.3 et §5.13 |
 | 2026-11-19 | **`GET /friend/{id}/cards`** : maison d'un ami validé en **lecture seule**, cartes en base64 décodées en mémoire, sans stockage local ni modification (§5.14) |
+| 2026-11-19 | **Chargement en deux temps** : la liste ne contient plus que des métadonnées ; nouveau `GET /friend/{iduser}/cards/{idcard}` par carte, contrôles serveur ami/appartenance, modal de progression côté client, token roté sur **toutes** les réponses `/friend/*`. Aucun stockage persistant, **aucune incrémentation de version** (§3.3, §5.14) |
 | à venir | `GET /user`, mode génération asynchrone, tables de sécurité anti-rejeu, HTTPS |
 
 ---

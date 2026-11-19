@@ -82,7 +82,8 @@ Deux onglets dans la même fenêtre :
 - `src/services/api.ts` : `rechercherUtilisateurs` valide la saisie, appelle
   `appelProtege('/users?value=' + valeur)` puis tronque à 5 (`USER_SEARCH_LIMIT`
   serveur = 6). `listerDemandesAmis`, `listerAmis`, `envoyerDemandeAmi`,
-  `refuserDemandeAmi` et `listerCartesAmi` encapsulent les routes `/friend/*`
+  `refuserDemandeAmi`, `listerCartesAmi` (liste) et `recupererCarteAmi`
+  (une carte) encapsulent les routes `/friend/*`
   (contrat §5.13/§5.14 de `integration-client.md`).
 - Les deux appels de l'onglet Amis sont lancés ensemble : `api.ts` les
   **sérialise** (file d'appels) car le couple de tokens est à usage unique.

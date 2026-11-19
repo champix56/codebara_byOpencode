@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -12,7 +14,9 @@ import {
 import {
   ErreurSession,
   listerCartesAmi,
+  recupererCarteAmi,
   type CarteAmi,
+  type CarteAmiChargee,
 } from '../services/api';
 import { encoderBase64 } from '../utils/base64';
 import {
@@ -27,9 +31,12 @@ import VisuelCarte from './visuel-carte';
 
 // Maison d'un AMI visitée — LECTURE SEULE (décision owner 2026-11-19).
 //
-// Les archives .cdz viennent de `GET /friend/{id}/cards` (contrat §5.12) et
-// sont décodées EN MÉMOIRE : `extraireApercu` pour la grille, `ouvrirCdz`
-// (checksum cardHash) pour le détail 3D. Aucune écriture, jamais :
+// Chargement en deux temps (contrat §5.14) :
+//   1. `GET /friend/{id}/cards` → liste légère de métadonnées (sans archive) ;
+//   2. `GET /friend/{iduser}/cards/{idcard}` → UNE archive .cdz par carte de la
+//      liste, décodée EN MÉMOIRE (`extraireApercu` grille, `ouvrirCdz` détail).
+// Le serveur vérifie l'amitié validée ET l'appartenance de la carte à l'ami.
+// Aucune écriture, jamais :
 //   - PAS de `lireCarteLocale` / `enregistrerCarte` (services/collection.ts) ;
 //   - PAS de `majIndex` (index local des noms) ;
 //   - PAS de `telechargerCarte` (GET /card/{id}, réservé au propriétaire) ;
@@ -46,8 +53,9 @@ type Apercu = {
   deck: ApercuCarte['deck'];
 };
 
-type EtatListe =
-  | { phase: 'chargement' }
+type EtatChargement =
+  | { phase: 'liste' }
+  | { phase: 'cartes'; chargees: number; total: number }
   | { phase: 'pret' }
   | { phase: 'vide' }
   | { phase: 'erreur'; message: string };
@@ -63,12 +71,15 @@ export default function MaisonVisiteEcran({
   amiId: number;
   nickname: string;
 }) {
-  const [etat, definirEtat] = useState<EtatListe>({ phase: 'chargement' });
+  const [etat, definirEtat] = useState<EtatChargement>({ phase: 'liste' });
   const [cartes, definirCartes] = useState<CarteAmi[]>([]);
   const [apercus, definirApercus] = useState<Record<number, Apercu>>({});
+  const [cartesEnEchec, definirCartesEnEchec] = useState<number[]>([]);
   // Archives décodées conservées en mémoire le temps de la visite : le détail
   // réutilise les octets déjà reçus (aucun second appel réseau, aucun fichier).
   const octetsRef = useRef<Map<number, Uint8Array>>(new Map());
+  // Evite de continuer à charger (et à mettre à jour l'état) après démontage.
+  const annuleRef = useRef(false);
   const [detail, definirDetail] = useState<Detail>(null);
   const [detailErreur, definirDetailErreur] = useState<string | null>(null);
   const [largeurGrille, definirLargeurGrille] = useState(0);
@@ -85,58 +96,106 @@ export default function MaisonVisiteEcran({
     ),
   );
 
+  const preparerApercu = useCallback(async (carte: CarteAmiChargee) => {
+    const octets = cdzDepuisBase64(carte.cardBase64);
+    const apercu = await extraireApercu(octets);
+    octetsRef.current.set(carte.id, octets);
+    definirApercus((actuels) => ({
+      ...actuels,
+      [carte.id]: {
+        image: `data:image/png;base64,${encoderBase64(apercu.front)}`,
+        datas: apercu.datas,
+        deck: apercu.deck,
+      },
+    }));
+  }, []);
+
   const charger = useCallback(async () => {
-    definirEtat({ phase: 'chargement' });
+    annuleRef.current = false;
+    definirEtat({ phase: 'liste' });
+    definirCartes([]);
+    definirApercus({});
+    definirCartesEnEchec([]);
+    octetsRef.current.clear();
     definirDetail(null);
     definirDetailErreur(null);
-    definirApercus({});
     try {
       const liste = await listerCartesAmi(amiId);
-      definirCartes(liste);
-      definirEtat(liste.length === 0 ? { phase: 'vide' } : { phase: 'pret' });
+      if (annuleRef.current) return;
+      if (liste.length === 0) {
+        definirEtat({ phase: 'vide' });
+        return;
+      }
+
+      // Une carte à la fois : la modal affiche la progression réelle et le
+      // couple de tokens est consommé/roté sereinement (file dans api.ts).
+      definirEtat({ phase: 'cartes', chargees: 0, total: liste.length });
+      const chargees: CarteAmi[] = [];
+      const echecs: number[] = [];
+      let premierEchec: string | null = null;
+      for (const modele of liste) {
+        if (annuleRef.current) return;
+        try {
+          const carte = await recupererCarteAmi(amiId, modele.id);
+          if (annuleRef.current) return;
+          try {
+            // Archive illisible : la carte reste affichée par son numéro.
+            await preparerApercu(carte);
+          } catch {
+            // Décodeur tolérant : on ne bloque pas le chargement des suivantes.
+          }
+          if (annuleRef.current) return;
+          chargees.push({
+            id: carte.id,
+            cardHash: carte.cardHash,
+            cardpower: carte.cardpower,
+            health: carte.health,
+            attack: carte.attack,
+          });
+          definirCartes([...chargees]);
+          definirEtat({
+            phase: 'cartes',
+            chargees: chargees.length,
+            total: liste.length,
+          });
+        } catch (erreur) {
+          if (erreur instanceof ErreurSession) throw erreur;
+          if (annuleRef.current) return;
+          echecs.push(modele.id);
+          if (premierEchec === null) {
+            premierEchec = (erreur as Error).message;
+          }
+        }
+      }
+      if (annuleRef.current) return;
+      definirCartesEnEchec(echecs);
+      definirEtat(
+        chargees.length === 0
+          ? {
+              phase: 'erreur',
+              message: premierEchec ?? `Impossible de charger les cartes de ${nickname}.`,
+            }
+          : { phase: 'pret' },
+      );
     } catch (erreur) {
+      if (annuleRef.current) return;
       if (erreur instanceof ErreurSession) {
         // Session morte : le service a déjà redirigé vers la connexion.
         return;
       }
       definirEtat({ phase: 'erreur', message: (erreur as Error).message });
     }
-  }, [amiId]);
+  }, [amiId, nickname, preparerApercu]);
 
   useEffect(() => {
-    // Un seul chargement à l'ouverture (appels protégés sérialisés par api.ts).
+    // Un seul chargement à l'ouverture ; toute requête est sérialisée dans api.ts.
+    const octets = octetsRef.current;
     (async () => charger())();
-  }, [charger]);
-
-  // Aperçus : décodage séquentiel des archives reçues, une à une pour ne pas
-  // bloquer le thread UI. Annulé au démontage ou au rechargement de la liste.
-  useEffect(() => {
-    let annule = false;
-    (async () => {
-      for (const carte of cartes) {
-        if (annule) return;
-        try {
-          const octets = cdzDepuisBase64(carte.cardBase64);
-          const apercu = await extraireApercu(octets);
-          if (annule) return;
-          octetsRef.current.set(carte.id, octets);
-          definirApercus((actuels) => ({
-            ...actuels,
-            [carte.id]: {
-              image: `data:image/png;base64,${encoderBase64(apercu.front)}`,
-              datas: apercu.datas,
-              deck: apercu.deck,
-            },
-          }));
-        } catch {
-          // Archive illisible : la carte reste affichée par son numéro.
-        }
-      }
-    })();
     return () => {
-      annule = true;
+      annuleRef.current = true;
+      octets.clear();
     };
-  }, [cartes]);
+  }, [charger]);
 
   const ouvrirDetail = async (carte: CarteAmi) => {
     definirDetailErreur(null);
@@ -204,8 +263,45 @@ export default function MaisonVisiteEcran({
   }
 
   // ── Grille de la maison visitée ──────────────────────────────────────────
+  const chargees = etat.phase === 'cartes' ? etat.chargees : 0;
+  const total = etat.phase === 'cartes' ? etat.total : 0;
   return (
     <ScrollView style={styles.plein} contentContainerStyle={styles.contenu}>
+      <Modal
+        visible={etat.phase === 'liste' || etat.phase === 'cartes'}
+        animationType="fade"
+        transparent
+      >
+        <View style={styles.voile}>
+          <View style={styles.cadreChargement}>
+            <ActivityIndicator size="large" color="#43a047" />
+            <Text style={styles.titreChargement}>
+              Chargement de la maison de {nickname}
+            </Text>
+            <Text style={styles.texteChargement}>
+              {etat.phase === 'liste'
+                ? 'Récupération de la liste des cartes…'
+                : chargees === total
+                  ? 'Décodage des dernières cartes…'
+                  : `Carte ${chargees} sur ${total} chargée${total > 1 ? 's' : ''}…`}
+            </Text>
+            {etat.phase === 'cartes' && (
+              <View style={styles.barreFond}>
+                <View
+                  style={[
+                    styles.barreAvance,
+                    { width: `${Math.round((chargees / total) * 100)}%` },
+                  ]}
+                />
+              </View>
+            )}
+            <Text style={styles.noteChargement}>
+              Lecture seule — aucune carte n’est enregistrée sur l’appareil.
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.banderole}>
         <Text style={styles.titre}>Maison de {nickname}</Text>
         <Text style={styles.lectureSeule}>
@@ -213,9 +309,6 @@ export default function MaisonVisiteEcran({
         </Text>
       </View>
 
-      {etat.phase === 'chargement' && (
-        <Text style={styles.texteState}>Chargement des cartes de {nickname}…</Text>
-      )}
       {etat.phase === 'vide' && (
         <Text style={styles.texteState}>{nickname} n&apos;a pas encore de carte.</Text>
       )}
@@ -226,6 +319,11 @@ export default function MaisonVisiteEcran({
             <Text style={styles.boutonTexte}>Réessayer</Text>
           </Pressable>
         </View>
+      )}
+      {cartesEnEchec.length > 0 && (
+        <Text style={styles.erreur}>
+          {cartesEnEchec.length} carte(s) n’ont pas pu être chargées : {cartesEnEchec.join(', ')}
+        </Text>
       )}
       {detailErreur && <Text style={styles.erreur}>{detailErreur}</Text>}
 
@@ -294,6 +392,50 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 32,
     gap: 12,
+  },
+  voile: {
+    flex: 1,
+    backgroundColor: 'rgba(17, 24, 39, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  cadreChargement: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    padding: 22,
+    alignItems: 'center',
+    gap: 12,
+  },
+  titreChargement: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1f2937',
+    textAlign: 'center',
+  },
+  texteChargement: {
+    fontSize: 13,
+    color: '#374151',
+    textAlign: 'center',
+  },
+  barreFond: {
+    width: '100%',
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+    overflow: 'hidden',
+  },
+  barreAvance: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#43a047',
+  },
+  noteChargement: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
   },
   banderole: {
     alignItems: 'center',

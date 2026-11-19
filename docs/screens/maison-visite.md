@@ -12,8 +12,10 @@ aucun fichier local, aucun renommage, aucune écriture côté serveur.
 
 ## Structure visuelle
 
-- En-tête commun `EnteteEcran` : titre « Maison de <nickname> (visite) » +
-  chevron de retour (ajouté par `App.tsx`).
+- En-tête commun `EnteteEcran` : logo hauteur du texte + titre « Maison de
+  <nickname> (visite) » + chevron de retour (ajouté par `App.tsx`) ; à droite
+  pièce/valeur `1000` en bulle vert clair et avatar (initiales du nickname) →
+  `mairie`.
 - **Modal de chargement** (plein écran, fond translucide) tant que la maison se
   remplit : `ActivityIndicator`, titre « Chargement de la maison de
   <nickname> », état « Récupération de la liste des cartes… » puis « Carte 3 sur
@@ -38,7 +40,9 @@ aucun fichier local, aucun renommage, aucune écriture côté serveur.
 | Liste vide | « <nickname> n'a pas encore de carte. » |
 | 200 avec cartes | Grille d'aperçus (décodage séquentiel, une archive à la fois) |
 | Erreur API / réseau / 404 Friend not found | Message d'erreur + bouton « Réessayer » |
-| Une carte unitaire échoue | Les autres cartes chargent quand même ; message sous la grille avec les `#id` en échec |
+| Une carte unitaire échoue (métier/404) | Les autres cartes chargent quand même ; message sous la grille avec les `#id` en échec |
+| Réponse de carte perdue/avortée (mobile) | `recupererCarteAmi` réessaie **une fois** (grâce d'un token côté serveur) ; la maison se charge intégralement |
+| Transfert interrompu après retry | Boucle arrêtée, cartes déjà chargées conservées, bandeau ambre « Transfert interrompu… Rouvre la maison pour reprendre. » — **pas** de fausse déconnexion |
 | Détail en cours | Visuel 3D + stats en lecture seule ; retour à la grille |
 | Archive corrompue au détail | Message d'erreur (contrôle `sha256 == cardHash` §6.3) |
 | Session morte | Redirection connexion gérée dans `api.ts` |
@@ -61,8 +65,10 @@ aucun fichier local, aucun renommage, aucune écriture côté serveur.
   par la fenêtre (type `Fenetre` dans `src/navigation/navigateur.ts`).
 - `listerCartesAmi` lit la liste légère ; `recupererCarteAmi` est appelé en série
   pour chaque `id` reçu. Les appels protégés sont sérialisés dans `api.ts` (token
-  rotatif à usage unique), et le token renvoyé sur erreur `/friend/*` y est
-  stocké avant de relancer l'erreur.
+  rotatif), et le token renvoyé sur erreur `/friend/*` y est stocké avant de
+  relancer l'erreur. Sur une `ErreurApi` de transport sans token roté (le serveur
+  a consommé le couple mais la réponse ~1,9 Mo n'a pas été lue), un retry unique
+  récupère le remplacement ; s'il échoue à son tour, la boucle s'arrête.
 - **Interdit dans ce composant** : `lireCarteLocale`, `enregistrerCarte`,
   `majIndex` (`services/collection.ts`), `telechargerCarte` (`GET /card/{id}`),
   `renommerCarte` / `PUT /card/name`, et toute purge de cartes cassées. Les

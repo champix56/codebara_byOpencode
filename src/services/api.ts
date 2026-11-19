@@ -40,10 +40,22 @@ export class ErreurApi extends Error {
   // l'appel suivant ne consomme pas un couple déjà utilisé.
   readonly tokenRotate: string | null;
 
-  constructor(message: string, tokenRotate: string | null = null) {
+  // Vrai quand la requête a PU atteindre le serveur et consommer le couple de
+  // tokens, mais que la réponse n'a pas pu être lue (timeout, coupure réseau,
+  // corps JSON tronqué). Le serveur garde le token précédent en grâce : un
+  // unique retry permet alors de récupérer le remplacement au lieu de perdre
+  // la session (bug mobile du chargement des maisons d'ami).
+  readonly transportIncertain: boolean;
+
+  constructor(
+    message: string,
+    tokenRotate: string | null = null,
+    transportIncertain = false,
+  ) {
     super(message);
     this.name = 'ErreurApi';
     this.tokenRotate = tokenRotate;
+    this.transportIncertain = transportIncertain;
   }
 }
 
@@ -65,13 +77,18 @@ async function lireJson(reponse: Response): Promise<Record<string, unknown>> {
   if (!reponse.ok) {
     const texte = await reponse.text();
     let corps: Record<string, unknown> | null = null;
+    let corpsIllisible = false;
     try {
       const parsed: unknown = JSON.parse(texte);
       if (typeof parsed === 'object' && parsed !== null) {
         corps = parsed as Record<string, unknown>;
+      } else {
+        corpsIllisible = true;
       }
     } catch {
-      // Corps non JSON : garder le texte brut.
+      // Corps non JSON : garder le texte brut ; le token roté éventuellement
+      // renvoyé par le serveur est illisible (cf. transportIncertain).
+      corpsIllisible = true;
     }
     let message: string;
     if (typeof corps?.message === 'string') {
@@ -87,7 +104,7 @@ async function lireJson(reponse: Response): Promise<Record<string, unknown>> {
     const tokenRotate = typeof corps?.API_REQUEST_TOKEN === 'string'
       ? corps.API_REQUEST_TOKEN as string
       : null;
-    throw new ErreurApi(message, tokenRotate);
+    throw new ErreurApi(message, tokenRotate, corpsIllisible && !tokenRotate);
   }
   return (await reponse.json()) as Record<string, unknown>;
 }
@@ -109,9 +126,13 @@ async function avecDelai(
   } catch (erreur) {
     if (erreur instanceof ErreurApi || erreur instanceof ErreurSession) throw erreur;
     if (erreur instanceof Error && erreur.name === 'AbortError') {
-      throw new ErreurApi(`Le serveur met trop de temps à répondre (${URL_BASE}) — réessaie.`);
+      throw new ErreurApi(
+        `Le serveur met trop de temps à répondre (${URL_BASE}) — réessaie.`,
+        null,
+        true,
+      );
     }
-    throw new ErreurApi(`Serveur injoignable (${URL_BASE})`);
+    throw new ErreurApi(`Serveur injoignable (${URL_BASE})`, null, true);
   } finally {
     clearTimeout(minuteur);
   }
@@ -494,9 +515,23 @@ export async function recupererCarteAmi(
   idAmi: number,
   idCarte: number,
 ): Promise<CarteAmiChargee> {
-  const donnees = await appelProtege(`/friend/${idAmi}/cards/${idCarte}`, {
+  const appeler = () => appelProtege(`/friend/${idAmi}/cards/${idCarte}`, {
     timeout: DELAI_CARTE_AMI_MS,
   });
+  let donnees: Record<string, unknown>;
+  try {
+    donnees = await appeler();
+  } catch (erreur) {
+    // .cdz ≈ 1,9 Mo : sur mobile, le bridge natif peut avorter la lecture du
+    // corps APRÈS que le serveur a consommé le couple de tokens et roté. Le
+    // client n'a alors pas reçu le remplacement. Le serveur conserve le token
+    // précédent en grâce : un seul retry le récupère et évite une fausse
+    // déconnexion à la carte suivante (les tentatives sont sérialisées).
+    if (!(erreur instanceof ErreurApi) || !erreur.transportIncertain) {
+      throw erreur;
+    }
+    donnees = await appeler();
+  }
   const carte = donnees.card;
   if (typeof carte !== 'object' || carte === null) {
     throw new ErreurApi('Réponse carte d’ami inattendue du serveur');

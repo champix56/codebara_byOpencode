@@ -12,6 +12,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import {
+  ErreurApi,
   ErreurSession,
   listerCartesAmi,
   recupererCarteAmi,
@@ -75,6 +76,9 @@ export default function MaisonVisiteEcran({
   const [cartes, definirCartes] = useState<CarteAmi[]>([]);
   const [apercus, definirApercus] = useState<Record<number, Apercu>>({});
   const [cartesEnEchec, definirCartesEnEchec] = useState<number[]>([]);
+  // Transfert interrompu après épuisement du retry : on garde les cartes déjà
+  // chargées, mais on n'envoie surtout pas un token potentiellement périmé.
+  const [avertissement, definirAvertissement] = useState<string | null>(null);
   // Archives décodées conservées en mémoire le temps de la visite : le détail
   // réutilise les octets déjà reçus (aucun second appel réseau, aucun fichier).
   const octetsRef = useRef<Map<number, Uint8Array>>(new Map());
@@ -116,6 +120,7 @@ export default function MaisonVisiteEcran({
     definirCartes([]);
     definirApercus({});
     definirCartesEnEchec([]);
+    definirAvertissement(null);
     octetsRef.current.clear();
     definirDetail(null);
     definirDetailErreur(null);
@@ -133,7 +138,7 @@ export default function MaisonVisiteEcran({
       const chargees: CarteAmi[] = [];
       const echecs: number[] = [];
       let premierEchec: string | null = null;
-      for (const modele of liste) {
+      for (const [index, modele] of liste.entries()) {
         if (annuleRef.current) return;
         try {
           const carte = await recupererCarteAmi(amiId, modele.id);
@@ -161,6 +166,18 @@ export default function MaisonVisiteEcran({
         } catch (erreur) {
           if (erreur instanceof ErreurSession) throw erreur;
           if (annuleRef.current) return;
+          // Une ErreurApi SANS token roté, même après le retry de
+          // recupererCarteAmi, signifie que le couple a pu être consommé sans
+          // qu'on reçoive son remplacement. Continuer enverrait un token
+          // périmé → « Invalid REQUEST TOKEN » → fausse déconnexion. On stoppe
+          // et on garde les cartes déjà chargées.
+          if (erreur instanceof ErreurApi && !erreur.tokenRotate) {
+            echecs.push(...liste.slice(index).map((restant) => restant.id));
+            definirAvertissement(
+              `Transfert interrompu : ${(erreur as Error).message}. Rouvre la maison pour reprendre.`,
+            );
+            break;
+          }
           echecs.push(modele.id);
           if (premierEchec === null) {
             premierEchec = (erreur as Error).message;
@@ -325,6 +342,7 @@ export default function MaisonVisiteEcran({
           {cartesEnEchec.length} carte(s) n’ont pas pu être chargées : {cartesEnEchec.join(', ')}
         </Text>
       )}
+      {avertissement && <Text style={styles.avertissement}>{avertissement}</Text>}
       {detailErreur && <Text style={styles.erreur}>{detailErreur}</Text>}
 
       {etat.phase === 'pret' && (
@@ -474,6 +492,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#c62828',
     textAlign: 'center',
+    marginTop: 12,
+  },
+  avertissement: {
+    fontSize: 14,
+    color: '#92400e',
+    backgroundColor: '#fef3c7',
+    borderRadius: 8,
+    padding: 10,
     marginTop: 12,
   },
   blocErreur: {

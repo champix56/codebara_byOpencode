@@ -9,7 +9,8 @@ complet** est dans `integration-client.md` **à la racine du projet** (§ réfé
 - Cartes : `POST /card` (génération depuis un code-barres — §5.3, timeout dédié **150 s**, réponse synchrone `card` ou asynchrone `cardid` seul), `GET /card` (liste — §5.4, sans noms ni saisons), `GET /card/{id}` (une carte + son fichier — §5.5), **`GET /card/check` (§5.6 — anti-tamper : `cid` + `hash` sha256 du .cdz complet dans le header `datas`, réponse `isChecksumGood`)**, `PUT /card/name` (renommage — §5.7, réponse `{cid, card}` sans checksum global).
 - Saisons d'affichage : **`GET /season/check` (§5.11 — `verifierSaison(hash, pays)` : hash sha256 du .cds courant, `country` dans le header `datas`)** et **`GET /season` (`telechargerSaison(pays)` — .cds base64, timeout dédié 60 s ; null = aucune saison active)** — consommées par `saison.ts`, cf. `cds-format.md`.
 - Appels protégés **sérialisés** (§9.1), **rotation** du `API_REQUEST_TOKEN` sur tout succès (§3.3), **mort de session** (« Invalid REQUEST TOKEN ») ET **sortie volontaire** (`quitterSession`, déconnexion mairie) = reset tranche + purge + fenêtre connexion (`remplacer`, navigateur).
-- Timeout 10 s (hors génération, §2), base URL `EXPO_PUBLIC_SERVER_URL` (`.env`).
+- `ErreurApi.transportIncertain` (2026-11-19) distingue les erreurs où le serveur a **pu** consommer le couple sans que la réponse soit lue (timeout, coupure, JSON tronqué) : `recupererCarteAmi` réessaie **une seule fois** (le serveur garde le token précédent en grâce, §3.3 §3.5), puis l'écran arrête la boucle au lieu d'envoyer un token périmé. Cela corrige la fausse déconnexion mobile après la première carte d'une maison d'ami (le web, dont le transfert est fiable, n'était pas touché).
+- Timeout 10 s (hors génération, §2), **120 s pour une carte d'ami** (~1,9 Mo en base64), base URL `EXPO_PUBLIC_SERVER_URL` (`.env`).
 
 ## `src/services/collection.ts` — cache collection local (§6.6)
 

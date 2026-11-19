@@ -13,8 +13,9 @@ Deux onglets dans la même fenêtre :
 
 ## Structure visuelle
 
-- En-tête commun `EnteteEcran` : titre « École » + chevron de retour (ajouté par
-  `App.tsx`).
+- En-tête commun `EnteteEcran` : logo hauteur du texte + titre « École » + chevron
+  de retour (ajouté par `App.tsx`) ; à droite pièce/valeur `1000` en bulle vert
+  clair et avatar (initiales du nickname) → `mairie`.
 - Barre d'onglets en haut : « Recherche » (actif par défaut) / « Amis (n) » avec
   le nombre d'amis validés. L'onglet Amis charge demandes + amis à la première
   visite.

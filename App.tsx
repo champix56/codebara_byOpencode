@@ -106,7 +106,7 @@ function rendreFenetre(fenetre: Fenetre): ReactNode {
           <NotesVersion />
         </FenetreAvecEntete>
       );
-    case 'école':
+    case 'ecole':
       return (
         <FenetreAvecEntete titre="École">
           <Ecole />

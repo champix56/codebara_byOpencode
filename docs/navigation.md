@@ -19,10 +19,13 @@ d'historique navigateur.
 | --- | --- | --- |
 | `chargement` | `src/ecrans/chargement.tsx` | Entrée de l'app (splash par étapes réelles, cf. `screens/chargement.md`) |
 | `connexion` | `src/ecrans/connexion.tsx` | Connexion / création de compte |
-| `principal` | `src/ecrans/principal.tsx` | Fenêtre principale — carte + hotspots + bandeau pub |
+| `principal` | `src/ecrans/principal.tsx` | Fenêtre principale — carte de saison + ressources taponables + bandeau pub |
 | `usine` | `App.tsx` + `components/usine-ecran(.web)` | Scanner + fabrication de carte (caméra natif / saisie web) |
 | `carte` | `App.tsx` + `components/carte-detail.tsx` | Détail d'une carte (`carteId` porté par la fenêtre) |
 | `maison` `mairie` `boutique` `arene` | `App.tsx` + composants | Collection / infos perso / fenêtres vierges |
+| `ecole` | `src/ecrans/ecole.tsx` | Recherche de joueurs et amis (cf. `screens/ecole.md`) |
+| `maison-visite` | `src/components/maison-visite-ecran.tsx` | Maison d'un ami validé, lecture seule (cf. `screens/maison-visite.md`) |
+| `notes` | `src/components/notes-version.tsx` | Notes de version (champ version sous le bandeau pub) |
 
 Flux : `chargement` exécute ses tâches puis `remplacer(connexion|principal)` —
 le splash est retiré de la pile, donc impossible d'y revenir au bouton retour.
@@ -32,6 +35,12 @@ maison `EnteteEcran`, ou bouton système Android) dépile via `retourner`.
 
 Après l'enregistrement du nom d'une carte fabriquée, la pile empile le **détail
 carte** au-dessus de l'usine (exigence produit 2026-11-15).
+
+Les identifiants de fenêtres sont **ASCII sans accent** : `ecole` (le libellé
+affiché « École » porte seul l'accent). Une ressource graphique de saison cible
+une fenêtre par `batiments.*.fenetre` (cf. `cds-format.md`) ; seules les fenêtres
+sans paramètre listées dans `ZONES` (`src/ecrans/principal.tsx`) peuvent être
+ouvertes de cette façon — une valeur inconnue est ignorée.
 
 ## Web — historique navigateur aligné sur la pile
 

@@ -7,14 +7,20 @@ import MenuLateral from '../components/menu-lateral';
 import { naviguer, type Fenetre } from '../navigation/navigateur';
 import { saisonAffichageCourante } from '../services/saison';
 
-// Les fenêtres existant derrière les fenêtres nommées par le season.json —
-// sert aussi de garde-fou : une fenêtre de saison encore sans correspondance
-// est ignorée au lieu de faire planter la navigation.
+// Correspondance entre la valeur `fenetre` du season.json (batiments.*.fenetre)
+// et une Fenetre. Les clés sont des identifiants de CODE : ASCII, sans accent
+// (`ecole`, jamais `école`) — les accents restent réservés aux libellés affichés
+// (« École » dans le menu, titre de l'en-tête). Seules les fenêtres sans
+// paramètre peuvent être ciblées par une ressource graphique de saison ; une
+// valeur inconnue est ignorée (garde-fou) au lieu de faire planter la navigation.
 const ZONES: Record<string, Fenetre> = {
   usine: { nom: 'usine' },
   maison: { nom: 'maison' },
+  mairie: { nom: 'mairie' },
   boutique: { nom: 'boutique' },
   arene: { nom: 'arene' },
+  notes: { nom: 'notes' },
+  ecole: { nom: 'ecole' },
 };
 
 // Fenêtre principale : la carte de la saison d'affichage (`.cds` chargé par le

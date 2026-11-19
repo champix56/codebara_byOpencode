@@ -29,6 +29,10 @@ Run lint and typecheck before declaring any task done.
 - All navigation is state-based via `src/navigation/navigateur.ts` (`naviguer`, `remplacer`, `retourner`, type `Fenetre`) — root screens live in `src/ecrans/` (chargement, connexion, principal), other windows are rendered by `App.tsx` with the shared header `src/components/entete-ecran.tsx`. Keep non-screen code (components, hooks, utils) outside `src/ecrans/`.
 - On web the browser URL must always stay at the root (`src/utils/figerUrl.ts`, applied in `index.ts`); no path may ever select a specific screen — the app always starts from the chargement splash.
 
+## ASCII-only identifiers (standing rule)
+
+Code identifiers must be **ASCII, no accents**: `Fenetre.nom`, component names, file names and season `fenetre` values in `.cds` / `season.json`. The canonical id for the school window is `ecole` (never `école`); accents belong only to **displayed text** (menu label « École », header title) and to French documentation. A season graphic targets a window through `batiments.<key>.fenetre`: the value is an ASCII id with no parameter, resolved by the `ZONES` table in `src/ecrans/principal.tsx` (unknown values are ignored, never crash navigation).
+
 ## Building with EAS
 
 Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.

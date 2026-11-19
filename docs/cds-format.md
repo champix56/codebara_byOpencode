@@ -62,12 +62,22 @@ saison-1.cds (ZIP, DEFLATED)
 | `pays` | texte | Code de locale (`fr-FR`) ou **`intl`** pour une saison internationale. |
 | `debut` / `fin` | texte | Dates-heures ISO 8601 (UTC, suffixe `Z`). La saison est **courante** quand `debut ≤ maintenant ≤ fin`. |
 | `fond` | objet | Image de fond + **dimensions d'origine** : le repère de toutes les coordonnées de bâtiments est celui de cette image (ici 992×1586 = `CARTE_VIEWBOX`, cf. `src/data/carte.ts`). |
-| `batiments` | objet | **Clé = nom du bâtiment** ; une entrée par fenêtre possédant un bâtiment. Une fenêtre sans bâtiment n'apparaît PAS (mairie, notes… accessibles via le menu). |
+| `batiments` | objet | **Clé = nom du bâtiment** (identifiant ASCII) ; une entrée par fenêtre possédant un bâtiment. Une fenêtre sans bâtiment n'apparaît PAS (mairie, notes… accessibles via le menu). |
 
 Chaque bâtiment : `fichier` (PNG dans le ZIP), `x`/`y` (position du coin
 haut-gauche dans le repère du fond), `largeur`/`hauteur` (taille d'origine,
 redimensionnable par le client), `fenetre` (fenêtre à ouvrir au clic — valeur
 de `Fenetre.nom`, cf. `src/navigation/navigateur.ts`).
+
+**Règle d'identifiants (durable).** Les clés de `batiments` et les valeurs
+`fenetre` sont des identifiants de **code** : ASCII, sans accent. L'école est
+donc `"fenetre": "ecole"` (jamais `"école"`) — le libellé affiché « École »
+porte seul l'accent, dans le menu et l'en-tête. Exemple réel : `noel.cds`
+utilise `boutique.png` avec `"fenetre": "ecole"` : la ressource graphique n'a
+pas besoin de porter le même nom que la fenêtre qu'elle ouvre. Côté client, la
+table `ZONES` de `src/ecrans/principal.tsx` traduit chaque valeur `fenetre` en
+`Fenetre` ; une valeur inconnue ou avec paramètre est ignorée sans planter la
+navigation.
 
 Règles d'accès (décision produit) : les bâtiments **avec** ressource visuelle
 sont ouvrables **par clic sur l'image** dans la fenêtre principale **et** par

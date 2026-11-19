@@ -8,7 +8,7 @@ Un fichier Markdown par écran (« fenêtre ») de l'application. Règle constan
 | --- | --- | --- |
 | [chargement.md](./chargement.md) | Splash par étapes réelles — « tentative de connexion auto » / « connexion » puis « récupération des cartes » (vérification hash du cache, modal de destruction d'archive corrompue, re-téléchargement des manquantes) | 2026-11-12 |
 | [connexion.md](./connexion.md) | Connexion / création de compte — vrai serveur (`GET /user/auth`, `POST /user`) + bouton debug ; succès → splash post-connexion (étapes connexion + récupération des cartes) | 2026-11-12 |
-| [principal.md](./principal.md) | Fenêtre principale — carte plein écran, zones data-action taponables, bandeau publicitaire bas + champ version « CodEbara v0.0.x » pressable sous le bandeau (→ notes de version) | 2026-11-16 |
+| [principal.md](./principal.md) | Fenêtre principale — carte de saison plein écran, ressources graphiques taponables (`batiments.*.fenetre` → `ZONES`), bandeau publicitaire bas + champ version « CodEbara v0.0.x » pressable (→ notes de version) | 2026-11-19 |
 | [notes-version.md](./notes-version.md) | Notes de version — nouveautés par version (données générées depuis NOTES-VERSION.md, npm run maj:notes), version courante mise en avant | 2026-11-16 |
 | [usine.md](./usine.md) | Usine — natif : scanner expo-camera ; **web : scan caméra @zxing/browser** (+ saisie manuelle) — `POST /card` → popup éclosion (visuel 3D vitrine pleine largeur : front/back + nom obligatoire) → `PUT /card/name` → stockage `<idUser>/<id>.cdz` → redirection détail carte | 2026-11-15 |
 | [maison.md](./maison.md) | Maison — collection en grille d'aperçus (image front + valeurs), zoom 6→2 par ligne, recherche nom/#id, filtre série (nom de saison lu dans `datas.json`, sinon n°), cellules → détail | 2026-11-15 |
@@ -38,4 +38,7 @@ Facultatif : une section `## Notes` pour les contraintes de performance, platefo
 
 - Mettre à jour le fichier existant en place avant d'en créer un nouveau doublon.
 - Ajouter chaque nouveau fichier au tableau d'index ci-dessus avec la date.
+- Identifiants ASCII sans accent partout dans le code (`ecole.md`, `Fenetre.nom`
+  `ecole`, composants, valeurs `fenetre`) ; l'accent n'apparaît que dans les
+  textes affichés (« École »).
 - La conversation ne contient que le chemin du fichier + un résumé d'une ligne.

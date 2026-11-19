@@ -68,8 +68,10 @@ Deux onglets dans la même fenêtre :
 
 ## Navigation
 
-- Entrée : menu latéral de la fenêtre principale (`{ nom: 'école' }`) ; rendu par
-  `App.tsx` dans `FenetreAvecEntete titre="École"`.
+- Entrée : menu latéral de la fenêtre principale (`{ nom: 'ecole' }` — identifiant
+  ASCII, seul le libellé affiché porte l'accent « École ») ; rendu par `App.tsx`
+  dans `FenetreAvecEntete titre="École"`. Une ressource graphique de saison
+  (`batiments.*.fenetre`) peut aussi ouvrir cette fenêtre.
 - Retour : chevron de l'en-tête (`retourner`), bouton système Android, bouton
   « avant » du navigateur web.
 - Clic sur un **ami validé** (onglet Amis uniquement) → fenêtre `maison-visite`
@@ -79,6 +81,9 @@ Deux onglets dans la même fenêtre :
 
 ## Notes
 
+- Identifiant ASCII : `ecole` partout dans le code (`Fenetre.nom`, `App.tsx`,
+  menu latéral, `ZONES`, valeurs `fenetre` des saisons) ; « École » n'est qu'un
+  texte affiché.
 - `src/services/api.ts` : `rechercherUtilisateurs` valide la saisie, appelle
   `appelProtege('/users?value=' + valeur)` puis tronque à 5 (`USER_SEARCH_LIMIT`
   serveur = 6). `listerDemandesAmis`, `listerAmis`, `envoyerDemandeAmi`,

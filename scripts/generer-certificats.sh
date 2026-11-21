@@ -19,6 +19,14 @@
 set -euo pipefail
 
 DOMAINE="${1:-champix.freeboxos.fr}"
+
+# SAN : DNS: pour un nom de domaine, IP: pour une adresse IP (évite les
+# problèmes de résolution DNS côté client mobile, ex. Android).
+if [[ "$DOMAINE" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  SAN="IP:${DOMAINE}"
+else
+  SAN="DNS:${DOMAINE}"
+fi
 DUREE_JOURS=3650 # 10 ans — plateforme de développement
 RACINE="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -29,7 +37,7 @@ openssl req -x509 -newkey rsa:4096 -sha256 -nodes \
   -days "$DUREE_JOURS" \
   -keyout key.pem -out cert.pem \
   -subj "/CN=${DOMAINE}/O=CodEbara (dev)" \
-  -addext "subjectAltName=DNS:${DOMAINE}" \
+  -addext "subjectAltName=${SAN}" \
   -addext "basicConstraints=critical,CA:TRUE" \
   -addext "keyUsage=critical,keyCertSign,cRLSign,digitalSignature" \
   -addext "extendedKeyUsage=serverAuth"

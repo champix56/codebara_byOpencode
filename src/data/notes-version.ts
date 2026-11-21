@@ -1,14 +1,23 @@
 // GÉNÉRÉ par scripts/maj-notes-version.mjs — NE PAS ÉDITER À LA MAIN.
 // Source maintenue : NOTES-VERSION.md (racine) — npm run maj:notes après édition.
 // VERSION_APPLI = première section du md (la plus récente) ; affichée en jeu
-// sous le bandeau publicitaire (« CodEbara v0.0.13 ») et
+// sous le bandeau publicitaire (« CodEbara v0.0.14 ») et
 // consommée par la fenêtre notes de version.
 
-export const VERSION_APPLI = '0.0.13';
+export const VERSION_APPLI = '0.0.14';
 
 export type NoteVersion = { version: string; lignes: string[] };
 
 export const NOTES_VERSION: NoteVersion[] = [
+  {
+    "version": "v0.0.14",
+    "lignes": [
+      "Plein écran sur mobile : les boutons de navigation système sont masqués, seule la barre de notification du haut reste visible.",
+      "Un bouton flash (torche) est disponible dans la fenêtre caméra de l'usine pour scanner en basse lumière.",
+      "Correction du crash sur Android lors de l'affichage du nom incrusté sur les cartes (taille de police négative).",
+      "Stabilité améliorée lors de la visite de la maison d'un ami : plus de fermeture de l'application sur la dernière carte."
+    ]
+  },
   {
     "version": "v0.0.13",
     "lignes": [

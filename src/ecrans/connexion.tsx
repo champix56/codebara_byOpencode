@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { remplacer } from '../navigation/navigateur';
-import { authentifierParLogin, creerCompte, renouvelerMotDePasse, ErreurApi } from '../services/api';
+import { authentifierParLogin, creerCompte, renouvelerMotDePasse, ErreurApi, obtenirUrlBase, definirUrlBase } from '../services/api';
 import { useAppDispatch } from '../store/hooks';
 import { UTILISATEUR_DEBUG, seConnecter } from '../store/utilisateur';
 
@@ -33,7 +33,28 @@ const MODE_DEBUG =
   const [motDePasse, setMotDePasse] = useState('');
   const [message, setMessage] = useState<{ texte: string; erreur: boolean } | null>(null);
   const [enCours, setEnCours] = useState(false);
+  // Adresse du serveur — modifiable sur mobile uniquement (préremplie avec la
+  // valeur de .env, éditable avant la connexion).
+  const [adresseServeur, setAdresseServeur] = useState(obtenirUrlBase());
+  // Le champ « Adresse du serveur » est masqué par défaut sur mobile ; il
+  // réapparaît après 5 appuis rapides sur le logo (usage développeur).
+  const [afficherUrl, setAfficherUrl] = useState(false);
+  const compteurLogoRef = useRef(0);
+  const minuteurLogoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dispatcher = useAppDispatch();
+
+  const gererTapLogo = () => {
+    if (Platform.OS === 'web') return;
+    if (minuteurLogoRef.current) clearTimeout(minuteurLogoRef.current);
+    compteurLogoRef.current += 1;
+    if (compteurLogoRef.current >= 5) {
+      setAfficherUrl(true);
+      compteurLogoRef.current = 0;
+    }
+    minuteurLogoRef.current = setTimeout(() => {
+      compteurLogoRef.current = 0;
+    }, 2000);
+  };
 
   // Connexion : mot de passe haché côté client (§3.2 du contrat : sha256Hex(mail_exact + clair)) ;
   // Création : mail seul (le serveur génère le mot de passe et l'envoie par
@@ -46,6 +67,11 @@ const MODE_DEBUG =
 
   const soumettre = async () => {
     if (!peutSoumettre) return;
+    // Sur mobile, l'utilisateur peut avoir édité l'adresse du serveur :
+    // on l'applique avant tout appel API.
+    if (Platform.OS !== 'web') {
+      definirUrlBase(adresseServeur);
+    }
     setEnCours(true);
     setMessage(null);
     const mailExact = identifiant.trim();
@@ -130,11 +156,13 @@ const MODE_DEBUG =
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <Image
-          source={require('../../assets/icon.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        <Pressable onPress={gererTapLogo} accessibilityLabel="Logo">
+          <Image
+            source={require('../../assets/icon.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </Pressable>
         <Text style={styles.title}>Bienvenue sur codEbara</Text>
         <Text style={styles.subtitle}>
           {mode === 'login'
@@ -145,6 +173,21 @@ const MODE_DEBUG =
         </Text>
 
         <View style={styles.form}>
+          {Platform.OS !== 'web' && afficherUrl && (
+            <TextInput
+              style={styles.input}
+              placeholder="Adresse du serveur"
+              placeholderTextColor="#9ca3af"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              value={adresseServeur}
+              onChangeText={(texte) => {
+                setAdresseServeur(texte);
+                setMessage(null);
+              }}
+            />
+          )}
           <TextInput
             style={styles.input}
             placeholder="Email"

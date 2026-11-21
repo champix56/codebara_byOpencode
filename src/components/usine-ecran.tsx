@@ -24,6 +24,7 @@ export default function UsineEcran() {
   const [permission, demanderPermission] = useCameraPermissions();
   const [dernierScan, setDernierScan] = useState<Scan | null>(null);
   const [fabrication, definirFabrication] = useState<string | null>(null);
+  const [torche, definirTorche] = useState(false);
   const apiToken = useAppSelector((etat) => etat.utilisateur.apiToken);
   const sessionActive = apiToken !== null;
 
@@ -100,10 +101,19 @@ export default function UsineEcran() {
       <CameraView
         style={styles.appareil}
         onBarcodeScanned={gererScan}
+        enableTorch={torche}
         barcodeScannerSettings={{
           barcodeTypes: ['ean8', 'ean13', 'upc_a', 'upc_e'],
         }}
       />
+      {/* Bouton torche (flash) — mobile uniquement. */}
+      <Pressable
+        style={styles.boutonTorche}
+        onPress={() => definirTorche((v) => !v)}
+        accessibilityLabel={torche ? 'Éteindre le flash' : 'Allumer le flash'}
+      >
+        <Text style={styles.texteTorche}>{torche ? '🔦' : '💡'}</Text>
+      </Pressable>
       <View style={styles.panneau}>
         {dernierScan === null ? (
           <Text style={styles.astuce}>Visez un code-barres EAN-8, EAN-13, UPC-A ou UPC-E</Text>
@@ -271,5 +281,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9ca3af',
     textAlign: 'center',
+  },
+  boutonTorche: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  texteTorche: {
+    fontSize: 22,
   },
 });

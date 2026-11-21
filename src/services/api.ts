@@ -11,7 +11,24 @@ import { decoderBase64 } from '../utils/base64';
 // http://10.0.2.2:8080 depuis un
 // émulateur Android, http://<IP LAN>:8080 sur un téléphone physique, ou
 // http://localhost:8080 sur le web — CORS du serveur : localhost:8081/5173.
-const URL_BASE = process.env.EXPO_PUBLIC_SERVER_URL ?? 'http://localhost:8080';
+// Adresse de base du serveur. Modifiable à l'exécution (champ de connexion sur
+// mobile) : on garde une valeur par défaut issue de .env, et une valeur courante
+// mutable que les appels API utilisent.
+const URL_BASE_DEFAUT = process.env.EXPO_PUBLIC_SERVER_URL ?? 'http://localhost:8080';
+let urlBaseCourante = URL_BASE_DEFAUT;
+
+// Renvoie l'adresse de base actuellement utilisée (mobile : celle saisie à la
+// connexion ; sinon la valeur de .env).
+export function obtenirUrlBase(): string {
+  return urlBaseCourante;
+}
+
+// Met à jour l'adresse de base utilisée par tous les appels API suivants.
+// Vide → retour à la valeur par défaut de .env.
+export function definirUrlBase(url: string): void {
+  const nettoyee = (url ?? '').trim().replace(/\/+$/, '');
+  urlBaseCourante = nettoyee.length > 0 ? nettoyee : URL_BASE_DEFAUT;
+}
 // Timeout des appels simples (contrat §2 : 5–10 s). La génération de carte
 // POST /card est LONGUE (illustration IA synchrone : plusieurs secondes à
 // ~1–2 min, §5.3) — timeout dédié bien plus généreux.
@@ -127,12 +144,12 @@ async function avecDelai(
     if (erreur instanceof ErreurApi || erreur instanceof ErreurSession) throw erreur;
     if (erreur instanceof Error && erreur.name === 'AbortError') {
       throw new ErreurApi(
-        `Le serveur met trop de temps à répondre (${URL_BASE}) — réessaie.`,
+        `Le serveur met trop de temps à répondre (${obtenirUrlBase()}) — réessaie.`,
         null,
         true,
       );
     }
-    throw new ErreurApi(`Serveur injoignable (${URL_BASE})`, null, true);
+    throw new ErreurApi(`Serveur injoignable (${obtenirUrlBase()})`, null, true);
   } finally {
     clearTimeout(minuteur);
   }
@@ -195,7 +212,7 @@ async function appelProtege(
       }
       const donnees = await avecDelai(
         {
-          url: `${URL_BASE}${chemin}`,
+          url: `${obtenirUrlBase()}${chemin}`,
           method: options.method ?? 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -249,7 +266,7 @@ export async function authentifierParLogin(
   let donnees: Record<string, unknown>;
   try {
     donnees = await avecDelai({
-      url: `${URL_BASE}/user/auth`,
+      url: `${obtenirUrlBase()}/user/auth`,
       method: 'GET',
       headers: { datas: JSON.stringify({ mail: mailExact, password }) },
     });
@@ -281,7 +298,7 @@ export async function authentifierParTokens(
 ): Promise<DonneesUtilisateurServeur | null> {
   try {
     const donnees = await avecDelai({
-      url: `${URL_BASE}/user/auth`,
+      url: `${obtenirUrlBase()}/user/auth`,
       method: 'GET',
       headers: { datas: JSON.stringify({ API_TOKEN: apiToken, API_REQUEST_TOKEN: requestToken }) },
     });
@@ -301,7 +318,7 @@ export async function authentifierParTokens(
 export async function creerCompte(mailExact: string): Promise<void> {
   try {
     await avecDelai({
-      url: `${URL_BASE}/user`,
+      url: `${obtenirUrlBase()}/user`,
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mail: mailExact }),
@@ -327,7 +344,7 @@ export async function creerCompte(mailExact: string): Promise<void> {
 // le mail n'est pas envoyé (mot de passe imprimé dans son log).
 export async function renouvelerMotDePasse(mailExact: string): Promise<void> {
   await avecDelai({
-    url: `${URL_BASE}/user/renew-password`,
+    url: `${obtenirUrlBase()}/user/renew-password`,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mail: mailExact }),

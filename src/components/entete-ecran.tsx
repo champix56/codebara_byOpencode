@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fenetreCourante, naviguer } from '../navigation/navigateur';
-import { useAppSelector } from '../store/hooks';
+import type { ReactNode } from "react";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { fenetreCourante, naviguer } from "../navigation/navigateur";
+import { useAppSelector } from "../store/hooks";
 
 // Hauteur commune au titre et au logo : le logo reste exactement de la hauteur
 // du texte, comme demandé, sans agrandir la barre.
@@ -30,12 +30,12 @@ type Props = {
 export default function EnteteEcran({ titre, onRetour, gauche }: Props) {
   const insets = useSafeAreaInsets();
   const nickname = useAppSelector((etat) => etat.utilisateur.nickname);
-  const initiales = nickname.trim().slice(0, 2).toUpperCase() || '?';
+  const initiales = nickname.trim().slice(0, 2).toUpperCase() || "?";
 
   const ouvrirMairie = () => {
     // Évite d'empiler une seconde mairie quand on est déjà dedans.
-    if (fenetreCourante().nom !== 'mairie') {
-      naviguer({ nom: 'mairie' });
+    if (fenetreCourante().nom !== "mairie") {
+      naviguer({ nom: "mairie" });
     }
   };
 
@@ -43,15 +43,20 @@ export default function EnteteEcran({ titre, onRetour, gauche }: Props) {
     <View style={[styles.barre, { paddingTop: insets.top }]}>
       <View style={styles.rang}>
         <View style={[styles.cote, styles.coteGauche]}>
-          {gauche ?? (onRetour && (
-            <Pressable hitSlop={12} onPress={onRetour} accessibilityLabel="Retour">
-              <Text style={styles.chevron}>‹</Text>
-            </Pressable>
-          ))}
+          {gauche ??
+            (onRetour && (
+              <Pressable
+                hitSlop={12}
+                onPress={onRetour}
+                accessibilityLabel="Retour"
+              >
+                <Text style={styles.chevron}>‹</Text>
+              </Pressable>
+            ))}
         </View>
         <View style={styles.centre}>
           <Image
-            source={require('../../assets/icon.png')}
+            source={require("../../assets/icon.png")}
             style={styles.logo}
             resizeMode="contain"
           />
@@ -61,12 +66,12 @@ export default function EnteteEcran({ titre, onRetour, gauche }: Props) {
         </View>
         <View style={[styles.cote, styles.coteDroit]}>
           <View style={styles.monnaie}>
-            <Image
-              source={require('../../assets/coin.png')}
-              style={styles.piece}
-              resizeMode="contain"
-            />
             <View style={styles.bulleValeur}>
+              <Image
+                source={require("../../assets/coin.png")}
+                style={styles.piece}
+                resizeMode="contain"
+              />
               <Text style={styles.valeur}>{MONTANT_AFFICHE}</Text>
             </View>
           </View>
@@ -87,39 +92,39 @@ export default function EnteteEcran({ titre, onRetour, gauche }: Props) {
 
 const styles = StyleSheet.create({
   barre: {
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: "#e5e7eb",
   },
   rang: {
     height: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 8,
   },
   cote: {
     width: 88,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   coteGauche: {
-    alignItems: 'flex-start',
+    alignItems: "flex-start",
   },
   coteDroit: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "flex-end",
     gap: 5,
   },
   centre: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 6,
   },
   chevron: {
     fontSize: 28,
-    color: '#1f2937',
+    color: "#1f2937",
     paddingHorizontal: 12,
   },
   logo: {
@@ -130,13 +135,13 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: 17,
     lineHeight: HAUTEUR_TITRE,
-    fontWeight: '600',
-    color: '#1f2937',
-    textAlign: 'center',
+    fontWeight: "600",
+    color: "#1f2937",
+    textAlign: "center",
   },
   monnaie: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   piece: {
@@ -145,28 +150,29 @@ const styles = StyleSheet.create({
   },
   bulleValeur: {
     minWidth: 36,
-    alignItems: 'center',
-    backgroundColor: '#dcfce7',
+    alignItems: "center",
+    backgroundColor: "#dcfce7",
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
+    flexDirection: "row",
   },
   valeur: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#166534',
+    fontWeight: "700",
+    color: "#166534",
   },
   avatar: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#dbeafe',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#dbeafe",
   },
   initiales: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#1e40af',
+    fontWeight: "700",
+    color: "#1e40af",
   },
 });

@@ -73,7 +73,9 @@ aucun fichier local, aucun renommage, aucune écriture côté serveur.
   `majIndex` (`services/collection.ts`), `telechargerCarte` (`GET /card/{id}`),
   `renommerCarte` / `PUT /card/name`, et toute purge de cartes cassées. Les
   octets sont conservés dans une `useRef<Map>` le temps de la visite ; le
-  démontage du composant les laisse au GC.
+  démontage du composant les laisse au GC. La chaîne base64 d'origine (~2,5 Mo
+  par carte) est libérée dès le décodage pour éviter l'accumulation mémoire
+  sur mobile (crash observé sur la dernière carte).
 - `extraireApercu` (grille) saute les contrôles d'intégrité coûteux ;
   `ouvrirCdz(octets, cardHash)` (détail) valide le sha256 global et
   `hashs.json` **sur les octets déjà reçus** — aucun second appel réseau.

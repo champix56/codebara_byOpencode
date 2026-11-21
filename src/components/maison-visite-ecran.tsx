@@ -102,6 +102,10 @@ export default function MaisonVisiteEcran({
 
   const preparerApercu = useCallback(async (carte: CarteAmiChargee) => {
     const octets = cdzDepuisBase64(carte.cardBase64);
+    // Libérer la chaîne base64 (~2,5 Mo) dès le décodage pour soulager la
+    // mémoire sur mobile (sinon accumulation → fermeture de l'app sur la
+    // dernière carte). Les octets décodés restent pour le détail.
+    carte.cardBase64 = '';
     const apercu = await extraireApercu(octets);
     octetsRef.current.set(carte.id, octets);
     definirApercus((actuels) => ({
@@ -357,7 +361,7 @@ export default function MaisonVisiteEcran({
             const puissance = apercu?.datas.power ?? carte.cardpower ?? '—';
             const sante = apercu?.datas.health ?? carte.health ?? '—';
             const attaque = apercu?.datas.attack ?? carte.attack ?? '—';
-            const largeurCarte = largeurGrille / COLONNES - 8;
+            const largeurCarte = Math.max(1, largeurGrille / COLONNES - 8);
             return (
               <View key={carte.id} style={[styles.cellule, { width: `${100 / COLONNES}%` }]}>
                 <Pressable

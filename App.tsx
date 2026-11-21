@@ -9,6 +9,8 @@
 // retour qui dépile). Les barres natives du Stack ont disparu avec le router.
 import { useEffect, useState, type ReactNode } from 'react';
 import { BackHandler, Platform, StyleSheet, View } from 'react-native';
+import * as NavigationBar from 'expo-navigation-bar';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
@@ -152,13 +154,22 @@ export default function App() {
     return () => abonnement.remove();
   }, []);
 
+  // Mobile — masquer la barre de navigation système (boutons hardware) pour
+  // être en plein écran, tout en conservant la barre de notification du haut.
+  // iOS n'a pas de barre de navigation système : rien à faire.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    NavigationBar.setVisibilityAsync('hidden').catch(() => undefined);
+  }, []);
+
   return (
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
         {/* SafeAreaProvider : montait implicitement avec expo-router —
             registerRootComponent ne le fait pas (en-têtes + bandeau pub
             lisent useSafeAreaInsets). */}
-        <SafeAreaProvider>{rendreFenetre(fenetre)}</SafeAreaProvider>
+        <StatusBar style="auto" />
+      <SafeAreaProvider>{rendreFenetre(fenetre)}</SafeAreaProvider>
       </PersistGate>
     </Provider>
   );

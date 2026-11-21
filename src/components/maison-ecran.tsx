@@ -355,7 +355,7 @@ export default function MaisonEcran() {
                 const attaque = apercu?.datas.attack ?? carte.attack ?? '—';
                 // Largeur réelle de l'image front dans la cellule (cellule en
                 // % de la grille − padding 4×2) — pour l'échelle de police.
-                const largeurCarte = largeurGrille / colonnes - 8;
+                const largeurCarte = Math.max(1, largeurGrille / colonnes - 8);
                 return (
                   <View
                     key={carte.id}

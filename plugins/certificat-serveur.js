@@ -29,8 +29,9 @@ const {
   IOSConfig,
 } = require('expo/config-plugins');
 
-// Domaine du serveur de développement (émettre/régénérer avec le même).
-const DOMAINE = 'champix.freeboxos.fr';
+// Hôte du serveur de développement (émettre/régénérer avec le même). IP littérale
+// pour éviter tout problème de résolution DNS côté client mobile (Android).
+const DOMAINE = '82.65.35.66';
 // Nom de ressource Android (aapt2 : [a-z0-9_] uniquement).
 const RESSOURCE = 'cert_serveur';
 
@@ -67,13 +68,7 @@ const avecAndroid = (config) => {
         `<?xml version="1.0" encoding="utf-8"?>
 <!-- Serveur de développement auto-signé (cf. plugins/certificat-serveur.js) -->
 <network-security-config>
-    <!-- Hors domaine dev : comportement dev conservé (cleartext autorisé). -->
-    <base-config cleartextTrafficPermitted="true">
-        <trust-anchors>
-            <certificates src="system" />
-        </trust-anchors>
-    </base-config>
-    <!-- ${DOMAINE} : notre certificat est ancre de confiance (+ ancres système). -->
+    <!-- Hôte dev (${DOMAINE}) : notre certificat est ancre de confiance. -->
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="false">${DOMAINE}</domain>
         <trust-anchors>
@@ -81,6 +76,16 @@ const avecAndroid = (config) => {
             <certificates src="system" />
         </trust-anchors>
     </domain-config>
+    <!-- Repli : comportement dev conservé pour le reste du trafic. Notre certificat
+         est aussi ancre de confiance pour couvrir le cas où l'hôte est une IP
+         littérale (Android ne fait pas toujours correspondre une IP à un
+         domain-config). -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="@raw/${RESSOURCE}" />
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>
 `,
       );

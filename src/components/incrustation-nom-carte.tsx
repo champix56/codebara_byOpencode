@@ -28,7 +28,12 @@ export default function IncrustationNomCarte({
   largeurCarte,
 }: Props) {
   if (!position || !nom || nom.length === 0) return null;
-  const rapport = largeurCarte / repere;
+  // Garde-fou : largeurCarte peut être 0 ou négative avant le premier
+  // onLayout (grille pas encore mesurée) → fontSize négatif faisait planter
+  // le moteur de texte Android (« FontSize should be a positive value »).
+  const largeurSure = Math.max(1, largeurCarte);
+  const rapport = largeurSure / repere;
+  const tailleSure = Math.max(1, position.taille * rapport);
   return (
     <Text
       numberOfLines={2}
@@ -39,7 +44,7 @@ export default function IncrustationNomCarte({
           left: `${(position.x / repere) * 100}%`,
           top: `${(position.y / hauteurRepere) * 100}%`,
           width: `${((repere - position.x) / repere) * 100}%`,
-          fontSize: position.taille * rapport,
+          fontSize: tailleSure,
           color: position.couleur ?? '#1f2937',
         },
       ]}

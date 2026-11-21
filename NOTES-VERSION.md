@@ -6,6 +6,13 @@ courante embarquée dans l'app (`src/data/notes-version.ts`, généré par
 `npm run maj:notes`). Les nouveautés sont suivies à partir de v0.0.8 ; les
 évolutions antérieures ne sont pas listées.
 
+## v0.0.14
+
+- Plein écran sur mobile : les boutons de navigation système sont masqués, seule la barre de notification du haut reste visible.
+- Un bouton flash (torche) est disponible dans la fenêtre caméra de l'usine pour scanner en basse lumière.
+- Correction du crash sur Android lors de l'affichage du nom incrusté sur les cartes (taille de police négative).
+- Stabilité améliorée lors de la visite de la maison d'un ami : plus de fermeture de l'application sur la dernière carte.
+
 ## v0.0.13
 
 - L'école s'ouvre sur deux onglets : la recherche de joueurs (ajouter un ami, demande en attente ou déjà ami) et la liste des amis, avec les demandes reçues à accepter ou à refuser.

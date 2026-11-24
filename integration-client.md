@@ -735,7 +735,7 @@ Une notification est créée dans les deux cas.
 
 | Méthode & route | Authentification | Réponse |
 |---|---|---|
-| `GET /notifications` | tokens du header `datas` **ou**, sans token, `{"iduser": N}` dans le corps | `{"notifications":[{"id","object","date","type","state","cardid"}], "API_REQUEST_TOKEN"?}` — token **jamais** renvoyé en mode sans token ; trié du plus récent au plus ancien |
+| `GET /notifications` | tokens du header `datas` **ou**, sans token, `{"iduser": N}` dans le header `datas` (ou `?iduser=N`) | `{"notifications":[{"id","object","date","type","state","cardid"}], "API_REQUEST_TOKEN"?}` — token **jamais** renvoyé ni consommé en mode sans token ; trié du plus récent au plus ancien. **Jamais de corps sur GET** (refusé par `fetch`) |
 | `GET /notifications/{id}` | tokens obligatoires (header `datas` ou corps) | `{"notification":{…, "card": "<base64>", "checksum", "reception":{id,state,cb}}}`. Le carte n'est jointe que si `type == "nouvelles cartes"` et l'état `achevé` |
 | `PUT /notifications/{id}` | tokens obligatoires | `{"read": true, "state": 1, "API_REQUEST_TOKEN"}` — marque comme lue, **ne supprime pas** la notification |
 | `GET /awaiting_cards/{id}` | tokens obligatoires, propriétaire vérifié | Même contenu que `GET /card/{id}` + `{"reception":{id,state,cb}}` ; `404 Card not found` si la carte n'est pas achevée ou le fichier absent |

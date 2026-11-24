@@ -258,16 +258,17 @@ function estErreurSession(message: unknown): boolean {
 }
 
 // Route publique : GET /notifications peut être appelé sans token avec
-// `{"iduser": N}` dans le corps (aucun token renvoyé par le serveur).
+// `{"iduser": N}` dans le header `datas` (aucun token renvoyé). Un corps sur
+// GET est interdit par le `fetch` de React Native (« Body not allowed for GET
+// or HEAD requests »), qui se traduirait par un faux « Serveur injoignable ».
 async function appelSansToken(
   chemin: string,
-  corps: Record<string, unknown>,
+  donnees: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   return avecDelai({
     url: `${obtenirUrlBase()}${chemin}`,
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(corps),
+    headers: { datas: JSON.stringify(donnees) },
   });
 }
 
@@ -808,8 +809,10 @@ function lireNotification(source: unknown): NotificationServeur | null {
 // `iduser`). Sans session : `iduser` seul dans le corps, aucun token rendu.
 export async function listerNotifications(idUser: number | null): Promise<NotificationServeur[]> {
   const connecte = store.getState().utilisateur.apiToken !== null;
+  // `iduser` voyage dans le header `datas` (avec les tokens si Session) : jamais
+  // de corps sur GET, refusé par React Native et par les navigateurs.
   const donnees = connecte
-    ? await appelProtege('/notifications', { corps: { iduser: idUser } })
+    ? await appelProtege('/notifications', { datasExtra: { iduser: idUser } })
     : await appelSansToken('/notifications', { iduser: idUser });
   const brut = donnees.notifications;
   if (!Array.isArray(brut)) {

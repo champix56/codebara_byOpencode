@@ -191,7 +191,9 @@ function lireUtilisateur(source: Record<string, unknown>): DonneesUtilisateurSer
 export function quitterSession(): void {
   store.dispatch(seDeconnecter());
   persistor.purge();
-  remplacer({ nom: 'connexion' });
+  // Forcer : la messagerie peut verrouiller la navigation, mais une session
+  // morte doit toujours ramener à la connexion.
+  remplacer({ nom: 'connexion' }, true);
 }
 
 // ─── Route protégée générique (header `datas` + rotation) ───────────────────
@@ -253,6 +255,21 @@ async function appelProtege(
 // Reconnaissance d'erreur par sous-chaîne (contrat §4 : jamais la phrase entière).
 function estErreurSession(message: unknown): boolean {
   return typeof message === 'string' && message.includes('Invalid REQUEST TOKEN');
+}
+
+// Route publique : GET /notifications peut être appelé sans token avec
+// `{"iduser": N}` dans le header `datas` (aucun token renvoyé). Un corps sur
+// GET est interdit par le `fetch` de React Native (« Body not allowed for GET
+// or HEAD requests »), qui se traduirait par un faux « Serveur injoignable ».
+async function appelSansToken(
+  chemin: string,
+  donnees: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  return avecDelai({
+    url: `${obtenirUrlBase()}${chemin}`,
+    method: 'GET',
+    headers: { datas: JSON.stringify(donnees) },
+  });
 }
 
 // ─── Authentification (§5.2 – GET /user/auth, deux modes exclusifs) ─────────
@@ -746,4 +763,117 @@ export async function renommerCarte(cid: number, name: string): Promise<CarteRen
     throw new ErreurApi('Réponse de renommage inattendue du serveur (fichier .cdz absente)');
   }
   return { cid: nombreValeur(donnees, 'cid') ?? cid, cardBase64: card };
+}
+
+// ─── Messagerie (notifications + cartes en attente de réception) ────────────
+
+export type NotificationServeur = {
+  id: number;
+  object: string;
+  date: string | null;
+  type: string;
+  state: number;
+  cardid: number | null;
+  /** Présent sur le détail d'une carte achevée (même contenu que GET /card/{id}). */
+  card?: string;
+  checksum?: string;
+  reception?: { id: number; state: string; cb: string };
+};
+
+function lireNotification(source: unknown): NotificationServeur | null {
+  if (typeof source !== 'object' || source === null) return null;
+  const brute = source as Record<string, unknown>;
+  if (typeof brute.id !== 'number') return null;
+  const receptionBrute = brute.reception as Record<string, unknown> | undefined;
+  return {
+    id: brute.id,
+    object: texteValeur(brute, 'object'),
+    date: texteValeur(brute, 'date') || null,
+    type: texteValeur(brute, 'type'),
+    state: nombreValeur(brute, 'state') ?? 0,
+    cardid: nombreValeur(brute, 'cardid'),
+    card: texteValeur(brute, 'card') || undefined,
+    checksum: texteValeur(brute, 'checksum') || undefined,
+    reception:
+      receptionBrute && typeof receptionBrute.id === 'number'
+        ? {
+            id: receptionBrute.id,
+            state: texteValeur(receptionBrute, 'state'),
+            cb: texteValeur(receptionBrute, 'cb'),
+          }
+        : undefined,
+  };
+}
+
+// Avec session : les tokens du header désignent le joueur (le corps porte aussi
+// `iduser`). Sans session : `iduser` seul dans le corps, aucun token rendu.
+export async function listerNotifications(idUser: number | null): Promise<NotificationServeur[]> {
+  const connecte = store.getState().utilisateur.apiToken !== null;
+  // `iduser` voyage dans le header `datas` (avec les tokens si Session) : jamais
+  // de corps sur GET, refusé par React Native et par les navigateurs.
+  const donnees = connecte
+    ? await appelProtege('/notifications', { datasExtra: { iduser: idUser } })
+    : await appelSansToken('/notifications', { iduser: idUser });
+  const brut = donnees.notifications;
+  if (!Array.isArray(brut)) {
+    throw new ErreurApi('Réponse notifications inattendue du serveur');
+  }
+  return brut.map(lireNotification).filter((n): n is NotificationServeur => n !== null);
+}
+
+export async function obtenirNotification(id: number): Promise<NotificationServeur> {
+  const donnees = await appelProtege(`/notifications/${id}`);
+  const notification = lireNotification(donnees.notification);
+  if (!notification) throw new ErreurApi('Réponse notification inattendue du serveur');
+  return notification;
+}
+
+export async function marquerNotificationLue(id: number): Promise<void> {
+  await appelProtege(`/notifications/${id}`, { method: 'PUT' });
+}
+
+export async function obtenirCarteEnAttente(
+  carteId: number,
+): Promise<CarteTelechargee & { reception?: { state: string; cb: string } }> {
+  const donnees = await appelProtege(`/awaiting_cards/${carteId}`);
+  const card = texteValeur(donnees, 'card');
+  if (!card) throw new ErreurApi('Réponse carte en attente inattendue du serveur');
+  const reception = donnees.reception as Record<string, unknown> | undefined;
+  return {
+    id: nombreValeur(donnees, 'id') ?? carteId,
+    cardHash: texteValeur(donnees, 'cardHash') || null,
+    cardpower: nombreValeur(donnees, 'cardpower'),
+    health: nombreValeur(donnees, 'health'),
+    attack: nombreValeur(donnees, 'attack'),
+    cardBase64: card,
+    reception: reception
+      ? { state: texteValeur(reception, 'state'), cb: texteValeur(reception, 'cb') }
+      : undefined,
+  };
+}
+
+export type CarteAcceptee = {
+  cardid: number;
+  cardBase64: string;
+  checksum: string | null;
+};
+
+export async function accepterCarteEnAttente(
+  carteId: number,
+  nom?: string,
+): Promise<CarteAcceptee> {
+  const donnees = await appelProtege(`/awaiting_cards/${carteId}`, {
+    method: 'POST',
+    corps: nom ? { name: nom } : {},
+  });
+  const card = texteValeur(donnees, 'card');
+  const cardid = nombreValeur(donnees, 'cardid');
+  if (!card || cardid === null) {
+    throw new ErreurApi('Réponse d’acceptation inattendue du serveur');
+  }
+  return { cardid, cardBase64: card, checksum: texteValeur(donnees, 'checksum') || null };
+}
+
+export async function refuserCarteEnAttente(carteId: number): Promise<void> {
+  await appelProtege(`/awaiting_cards/${carteId}`, { method: 'DELETE' });
 }

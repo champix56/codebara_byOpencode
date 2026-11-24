@@ -23,7 +23,9 @@
 // pile est alors dépliée par le popstate — navigation et historique restent
 // alignés (un ‹ = une entrée consommée).
 
-import { longueurPile, remonter, retourner } from '../navigation/navigateur';
+import {
+  estRetourBloque, longueurPile, remonter, retourner,
+} from '../navigation/navigateur';
 
 type EtatHistorique = { profondeur: number } | null;
 
@@ -60,6 +62,7 @@ export function synchroniser(): void {
 // Bouton retour de l'en-tête sur le web : consomme une entrée d'historique ;
 // le popstate qui suit replie la pile (alignement un pour un).
 export function retourWeb(): void {
+  if (estRetourBloque()) return; // carte achevée en attente de réception
   if (typeof window === 'undefined' || !window.history) return;
   window.history.back();
 }

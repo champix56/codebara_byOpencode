@@ -300,40 +300,26 @@ Content-Type: application/json
   Longueurs acceptées aujourd'hui (testées) : 13 (EAN-13), 12 (UPC-A). Le serveur ne
   vérifie ni la checksum EAN ni le format — mais **le déterminisme du tirage dépend de la
   totalité des chiffres** : toujours envoyer le code complet tel qu'imprimé.
-- Durée de réponse : plusieurs secondes à ~1–2 minutes (génération d'illustration IA
-  **synchrone** dans la configuration actuelle). Mettre un timeout client généreux (§2).
+- Depuis le 2026-11-24, la génération est **asynchrone** (pool de threads) : la
+  réponse est immédiate avec `{\"cardid\": …}` (id définitif, §5.15). Aucun
+  timeout long n'est plus nécessaire.
 - Si le serveur d'IA est arrêté (configuration actuelle de dev) : 400
   `{"message": "Invalid Request with body given for: ..."}` — traité comme « service de
   génération indisponible » (§9.2).
 
-**Réponse (succès, génération synchrone — mode test actuel)**
-
-```json
-{
-  "cardid": 857,
-  "checksum": "7df7fe5b…64 hex…",
-  "card": "<base64 du fichier .cdz>",
-  "API_REQUEST_TOKEN": "…nouveau…"
-}
-```
-
-- `card` = archive `.cdz` (ZIP) encodée base64 — décodez en binaire, écrivez sur disque
-  `…/857.cdz` (nom recommandé : `<cardid>.cdz`), vérifiez `sha256(bytes) == checksum` (§6.3).
-- `cardid` = identifiant définitif de la carte (utilisé par les autres endpoints et
-  le nom du fichier).
-
-**Réponse (succès, génération asynchrone — mode production à venir)**
+**Réponse (succès)**
 
 ```json
 {"cardid": 857, "API_REQUEST_TOKEN": "…"}
 ```
 
-Le fichier `.cdz` devra alors être récupéré via `GET /card/{id}` une fois la
-finalisation **terminée** (mécanisme de notification client non encore écrit côté
-serveur : interrogez `GET /card` et vérifiez la présence de la carte). La spec
-d'origine (`endpoints.odt`) prévoyait la réponse complète en mode synchrone —
-implémentez les **deux** formes : si `card` est présent, utilisez-le ; sinon, rendez
-le client apte à aller chercher le fichier plus tard.
+`cardid` = identifiant définitif de la carte. Le `.cdz` n'est **pas** joint : la
+génération se poursuit côté serveur (§5.15) et le client est averti par une
+notification `nouvelles cartes`. Le téléchargement n'a lieu que lors de
+l'acceptation explicite via `POST /awaiting_cards/{id}` (nom optionnel) ; côté
+client, `fabrication-carte.tsx` se contente donc du `cardid` et n'écrit aucun
+fichier. Le client tolère néanmoins une réponse contenant `card`/`checksum`
+(ancien mode synchrone `TEST`).
 
 ### 5.4 `GET /card` — liste des cartes de l'utilisateur connecté
 
@@ -734,6 +720,36 @@ Une carte en échec est signalée sous la grille, sans bloquer les suivantes.
 - Le couple d'`API_REQUEST_TOKEN` est vérifié puis roté comme sur les autres
   routes `/friend/*`, **y compris sur toutes les erreurs** (métier ou
   inattendue) tant que les tokens présentés étaient valides.
+
+---
+
+### 5.15 Création asynchrone, messagerie et réception des cartes (2026-11-24)
+
+`POST /card` renvoie **toujours** `{cardid}` : l'id définitif est alloué dès la
+demande dans la table miroir `card_awaiting_receipt` (état `attente de traitement`,
+`fileloc` et `cardHash` vides). La tâche `{id, cb, iduser}` est écrite dans
+`content/card_tasks.json` et confiée à un pool de threads dimensionné par
+`CARD_POOL_SIZE` (`.env`, défaut 4). À la fin, la tâche est retirée du JSON et
+la ligne passe à `achevé` ou `echec` — elle reste en base jusqu'à la réception.
+Une notification est créée dans les deux cas.
+
+| Méthode & route | Authentification | Réponse |
+|---|---|---|
+| `GET /notifications` | tokens du header `datas` **ou**, sans token, `{"iduser": N}` dans le header `datas` (ou `?iduser=N`) | `{"notifications":[{"id","object","date","type","state","cardid"}], "API_REQUEST_TOKEN"?}` — token **jamais** renvoyé ni consommé en mode sans token ; trié du plus récent au plus ancien. **Jamais de corps sur GET** (refusé par `fetch`) |
+| `GET /notifications/{id}` | tokens obligatoires (header `datas` ou corps) | `{"notification":{…, "card": "<base64>", "checksum", "reception":{id,state,cb}}}`. Le carte n'est jointe que si `type == "nouvelles cartes"` et l'état `achevé` |
+| `PUT /notifications/{id}` | tokens obligatoires | `{"read": true, "state": 1, "API_REQUEST_TOKEN"}` — marque comme lue, **ne supprime pas** la notification |
+| `GET /awaiting_cards/{id}` | tokens obligatoires, propriétaire vérifié | Même contenu que `GET /card/{id}` + `{"reception":{id,state,cb}}` ; `404 Card not found` si la carte n'est pas achevée ou le fichier absent |
+| `POST /awaiting_cards/{id}` | tokens obligatoires, propriétaire vérifié | Corps optionnel `{"name": "…"}`. Copie la ligne dans `card` avec le **même id**, supprime l'attente + la tâche JSON + la notification, renvoie `{"cardid","card","checksum","API_REQUEST_TOKEN"}` |
+| `DELETE /awaiting_cards/{id}` | tokens obligatoires, propriétaire vérifié | Supprime la ligne, le `.cdz`, la tâche JSON et la notification ; `{"deleted": true, "API_REQUEST_TOKEN"}` |
+
+Types de notifications : `nouvelles cartes` (génération achevée) et
+`information` (échec). Le client `poste` affiche **l'objet seul** dans la liste,
+appelle `PUT /notifications/{id}` à l'ouverture puis `GET /notifications/{id}`.
+Une carte achevée impose le choix : `POST` (nom optionnel demandé par une modal)
+puis mise en cache `<idUser>/<id>.cdz`, ou `DELETE`. Une carte en échec est
+supprimée par `DELETE` dès l'ouverture de sa notification. Le retour est
+verrouillé tant qu'une carte achevée n'est pas traitée (en-tête, bouton Android
+et historique web). Migration SQL : `migration-card-awaiting.sql` (dépôt serveur).
 
 ---
 

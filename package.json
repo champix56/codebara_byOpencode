@@ -42,7 +42,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "build:web": "npx expo export -p web",
-    "build:android:local": "npm run maj:notes & rm -r /home/champix/.cache/eas-build & EAS_LOCAL_BUILD_WORKINGDIR=\"$HOME/.cache/eas-build\" eas build --platform android --profile preview --local",
+    "build:android:local": "npm run maj:notes && rm -rf \"$HOME/.cache/eas-build\" && EAS_LOCAL_BUILD_WORKINGDIR=\"$HOME/.cache/eas-build\" npm_config_userconfig=/dev/null npm_config_allow_scripts= eas build --platform android --profile preview --local",
     "maj:notes": "node scripts/maj-notes-version.mjs",
     "eas:fixapiurl": "eas env:set --name EXPO_PUBLIC_SERVER_URL --environment preview --visibility plaintext --value"
   },

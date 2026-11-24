@@ -82,3 +82,9 @@ npx eas-cli update     # mises à jour over-the-air
 ```
 
 Après l'ajout d'une librairie avec du code natif, l'app exige un **build de développement** : `npx expo run:ios` / `npx expo run:android` en local, ou `eas build --profile development`.
+
+Build Android local : `npm run build:android:local` (profil `preview`, APK signé). Le script régénère les notes de version, vide `$HOME/.cache/eas-build`, puis lance `eas build --local`.
+
+Le script force `npm_config_userconfig=/dev/null` **pour toute la chaîne EAS**. Sans cela, le `allow-scripts=@opencode/cli` du `~/.npmrc` utilisateur est relu par le `npx` qu'EAS utilise pour lancer son plugin, puis réinjecté dans le `npm ci` interne : échec `EALLOWSCRIPTS` (« --allow-scripts is not allowed in project-scoped installs »). Neutraliser seulement `npm_config_allow_scripts` ne suffit pas, car `npx` recalcule cette variable depuis le fichier utilisateur. Le `~/.npmrc` n'est pas modifié.
+
+Ne pas lancer ce script depuis `dist/` ni depuis un dossier de cache supprimé entre deux builds (sinon `uv_cwd`).

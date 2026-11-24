@@ -20,6 +20,7 @@ import FenetreVierge from './src/components/fenetre-vierge';
 import MaisonEcran from './src/components/maison-ecran';
 import MaisonVisiteEcran from './src/components/maison-visite-ecran';
 import MairieEcran from './src/components/mairie-ecran';
+import PosteEcran from './src/components/poste-ecran';
 import Ecole from './src/ecrans/ecole';
 import NotesVersion from './src/components/notes-version';
 import UsineEcran from './src/components/usine-ecran';
@@ -28,6 +29,7 @@ import Connexion from './src/ecrans/connexion';
 import Principal from './src/ecrans/principal';
 import {
   enregistrerEcouteur,
+  estRetourBloque,
   fenetreCourante,
   retourner,
   type Fenetre,
@@ -114,6 +116,12 @@ function rendreFenetre(fenetre: Fenetre): ReactNode {
           <Ecole />
         </FenetreAvecEntete>
       );
+    case 'poste':
+      return (
+        <FenetreAvecEntete titre="Poste">
+          <PosteEcran />
+        </FenetreAvecEntete>
+      );
     case 'maison-visite':
       // Maison d'un ami validé, en lecture seule : aucun bouton de réglage,
       // aucune écriture locale ou serveur (cf. maison-visite-ecran.tsx).
@@ -150,7 +158,12 @@ export default function App() {
   // si on s'y abonne, d'où la garde natif.)
   useEffect(() => {
     if (Platform.OS === 'web') return;
-    const abonnement = BackHandler.addEventListener('hardwareBackPress', () => retourner());
+    const abonnement = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Carte achevée en attente de réception : consommer le bouton système
+      // pour ne pas fermer l'application.
+      if (estRetourBloque()) return true;
+      return retourner();
+    });
     return () => abonnement.remove();
   }, []);
 

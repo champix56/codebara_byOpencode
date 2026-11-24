@@ -31,6 +31,8 @@ export type Fenetre =
   | { nom: 'notes' }
   | { nom: 'carte'; carteId: number }
   | { nom: 'ecole' }
+  // Messagerie : notifications du joueur, réception des cartes achevées.
+  | { nom: 'poste' }
   // Maison d'un ami visitée en lecture seule (cartes chargées en mémoire,
   // jamais enregistrées localement, aucune action de modification).
   | { nom: 'maison-visite'; amiId: number; nickname: string };
@@ -40,6 +42,18 @@ type Ecouteur = (fenetre: Fenetre) => void;
 // L'entrée dans l'application est TOUJOURS le splash (chargement) : une adresse
 // tapée à la main ne peut sélectionner aucune autre fenêtre (exigence produit).
 let pile: Fenetre[] = [{ nom: 'chargement' }];
+
+// Verrou de navigation posé par la messagerie tant qu'une carte achevée est
+// affichée : ni retour, ni ouverture d'une autre fenêtre avant acceptation/refus.
+let bloquerNavigation = false;
+
+export function definirBlocageRetour(bloque: boolean): void {
+  bloquerNavigation = bloque;
+}
+
+export function estRetourBloque(): boolean {
+  return bloquerNavigation;
+}
 
 let ecouteur: Ecouteur | null = null;
 
@@ -62,6 +76,7 @@ function emettre(): void {
 
 // Ouvre une fenêtre au-dessus de la courante (bouton retour / `retourner` actif).
 export function naviguer(fenetre: Fenetre): void {
+  if (bloquerNavigation) return;
   pile = [...pile, fenetre];
   // Une nouvelle navigation invalide la pile « avant » (comme un navigateur).
   pileAnnulees = [];
@@ -70,7 +85,11 @@ export function naviguer(fenetre: Fenetre): void {
 
 // Change la fenêtre courante sans ajouter d'entrée : la précédente disparaît
 // (retour arrière impossible vers elle — flux chargement/connexion/déconnexion).
-export function remplacer(fenetre: Fenetre): void {
+// `forcer` : sortie de session (api.ts) — doit rester possible même quand la
+// messagerie verrouille la navigation.
+export function remplacer(fenetre: Fenetre, forcer = false): void {
+  if (bloquerNavigation && !forcer) return;
+  if (forcer) bloquerNavigation = false;
   pile = [...pile.slice(0, -1), fenetre];
   pileAnnulees = [];
   emettre();
@@ -82,6 +101,9 @@ export function remplacer(fenetre: Fenetre): void {
 // gardée en mémoire (pileAnnulees) pour l'équivalent « avant » (remonter,
 // utilisé par le glissement d'historique du navigateur web).
 export function retourner(): boolean {
+  // Verrou : signaler « rien à dépiler » pour que l'historique web ne boucle
+  // pas ; App.tsx consomme séparément le bouton système Android.
+  if (bloquerNavigation) return false;
   if (pile.length <= 1) return false;
   pileAnnulees = [...pileAnnulees, pile[pile.length - 1]];
   pile = pile.slice(0, -1);
@@ -92,6 +114,7 @@ export function retourner(): boolean {
 // « Avant » : repose la dernière fenêtre dépilée par `retourner` (glissement
 // avant du navigateur web). Renvoie `false` s'il n'y a rien à remonter.
 export function remonter(): boolean {
+  if (bloquerNavigation) return false;
   if (pileAnnulees.length === 0) return false;
   pile = [...pile, pileAnnulees[pileAnnulees.length - 1]];
   pileAnnulees = pileAnnulees.slice(0, -1);

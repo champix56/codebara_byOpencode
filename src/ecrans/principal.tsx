@@ -21,6 +21,9 @@ const ZONES: Record<string, Fenetre> = {
   arene: { nom: 'arene' },
   notes: { nom: 'notes' },
   ecole: { nom: 'ecole' },
+  // Bâtiment « poste » d'une saison (`batiments.*.fenetre = poste`) — absent
+  // du .cds, la fenêtre reste accessible depuis le menu latéral.
+  poste: { nom: 'poste' },
 };
 
 // Fenêtre principale : la carte de la saison d'affichage (`.cds` chargé par le

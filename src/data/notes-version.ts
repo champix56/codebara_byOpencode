@@ -1,14 +1,23 @@
 // GÉNÉRÉ par scripts/maj-notes-version.mjs — NE PAS ÉDITER À LA MAIN.
 // Source maintenue : NOTES-VERSION.md (racine) — npm run maj:notes après édition.
 // VERSION_APPLI = première section du md (la plus récente) ; affichée en jeu
-// sous le bandeau publicitaire (« CodEbara v0.0.14 ») et
+// sous le bandeau publicitaire (« CodEbara v0.0.15 ») et
 // consommée par la fenêtre notes de version.
 
-export const VERSION_APPLI = '0.0.14';
+export const VERSION_APPLI = '0.0.15';
 
 export type NoteVersion = { version: string; lignes: string[] };
 
 export const NOTES_VERSION: NoteVersion[] = [
+  {
+    "version": "v0.0.15",
+    "lignes": [
+      "Fabriquer une carte ne t'immobilise plus devant l'usine : la génération se fait en arrière-plan et tu reçois une notification quand elle est prête.",
+      "Nouvelle fenêtre « Poste » pour lire tes messages et récupérer tes cartes, accessible depuis le menu ou le bâtiment de la saison.",
+      "À la réception, vois ta carte en 3D avec ses caractéristiques, puis accepte-la (avec ou sans nom) ou refuse-la.",
+      "Si une carte ne peut pas être générée, tu es prévenu dans la Poste et la carte est retirée automatiquement."
+    ]
+  },
   {
     "version": "v0.0.14",
     "lignes": [

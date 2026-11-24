@@ -191,8 +191,8 @@ export default function FabricationCarte({ chiffres, surFermer, surEnregistree }
             <View style={styles.centre}>
               <Text style={styles.titre}>Carte #{etape.carteId} créée</Text>
               <Text style={styles.texte}>
-                Le serveur prépare son fichier : la carte apparaîtra dans la maison une fois
-                finalisée (interroge la collection plus tard).
+                Le serveur prépare son fichier. Vous recevrez une notification dans la Poste
+                une fois la génération terminée — acceptez ou refusez la carte à ce moment-là.
               </Text>
               <Pressable style={styles.bouton} onPress={surFermer}>
                 <Text style={styles.boutonTexte}>Compris</Text>

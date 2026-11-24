@@ -6,6 +6,13 @@ courante embarquée dans l'app (`src/data/notes-version.ts`, généré par
 `npm run maj:notes`). Les nouveautés sont suivies à partir de v0.0.8 ; les
 évolutions antérieures ne sont pas listées.
 
+## v0.0.15
+
+- Fabriquer une carte ne t'immobilise plus devant l'usine : la génération se fait en arrière-plan et tu reçois une notification quand elle est prête.
+- Nouvelle fenêtre « Poste » pour lire tes messages et récupérer tes cartes, accessible depuis le menu ou le bâtiment de la saison.
+- À la réception, vois ta carte en 3D avec ses caractéristiques, puis accepte-la (avec ou sans nom) ou refuse-la.
+- Si une carte ne peut pas être générée, tu es prévenu dans la Poste et la carte est retirée automatiquement.
+
 ## v0.0.14
 
 - Plein écran sur mobile : les boutons de navigation système sont masqués, seule la barre de notification du haut reste visible.

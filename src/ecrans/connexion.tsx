@@ -33,18 +33,17 @@ const MODE_DEBUG =
   const [motDePasse, setMotDePasse] = useState('');
   const [message, setMessage] = useState<{ texte: string; erreur: boolean } | null>(null);
   const [enCours, setEnCours] = useState(false);
-  // Adresse du serveur — modifiable sur mobile uniquement (préremplie avec la
-  // valeur de .env, éditable avant la connexion).
+  // Adresse du serveur — modifiable sur mobile comme sur web (préremplie avec
+  // la valeur de .env, éditable avant la connexion).
   const [adresseServeur, setAdresseServeur] = useState(obtenirUrlBase());
-  // Le champ « Adresse du serveur » est masqué par défaut sur mobile ; il
-  // réapparaît après 5 appuis rapides sur le logo (usage développeur).
+  // Le champ « Adresse du serveur » est masqué par défaut ; il réapparaît après
+  // 5 appuis rapides sur le logo (mobile comme web, usage développeur).
   const [afficherUrl, setAfficherUrl] = useState(false);
   const compteurLogoRef = useRef(0);
   const minuteurLogoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dispatcher = useAppDispatch();
 
   const gererTapLogo = () => {
-    if (Platform.OS === 'web') return;
     if (minuteurLogoRef.current) clearTimeout(minuteurLogoRef.current);
     compteurLogoRef.current += 1;
     if (compteurLogoRef.current >= 5) {
@@ -67,11 +66,9 @@ const MODE_DEBUG =
 
   const soumettre = async () => {
     if (!peutSoumettre) return;
-    // Sur mobile, l'utilisateur peut avoir édité l'adresse du serveur :
-    // on l'applique avant tout appel API.
-    if (Platform.OS !== 'web') {
-      definirUrlBase(adresseServeur);
-    }
+    // L'utilisateur peut avoir édité l'adresse du serveur (accès développeur
+    // par 5 appuis sur le logo) : on l'applique avant tout appel API.
+    definirUrlBase(adresseServeur);
     setEnCours(true);
     setMessage(null);
     const mailExact = identifiant.trim();
@@ -173,7 +170,7 @@ const MODE_DEBUG =
         </Text>
 
         <View style={styles.form}>
-          {Platform.OS !== 'web' && afficherUrl && (
+          {afficherUrl && (
             <TextInput
               style={styles.input}
               placeholder="Adresse du serveur"

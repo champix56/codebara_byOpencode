@@ -14,7 +14,7 @@ description: Project documentation for codEbara — architecture, structure, and
    - `services-serveur.md` — api.ts (HTTP client), collection.ts (.cdz cache), verification.ts
    - `cdz-pipeline.md` — .cdz archive reading/validation (ZIP, sha256, hashs.json, seasons)
    - `visuel-carte-3d.md` — 3D card showcase (rotation, tilt, zoom)
-   - `serveur-dev-https.md` — self-signed dev HTTPS certificate (generation, Android/iOS integration)
+   - `serveur-https.md` — public HTTPS certificate, no native setup, IPv4-only DNS requirement
    - `development.md` — installation, dev commands, checks, EAS builds
    - `conventions.md` — coding rules, Expo documentation policy, hard rules
    - `screens/<id>.md` — screen-by-screen ("fenêtre") descriptions; index in `screens/README.md`

@@ -50,13 +50,3 @@ yarn-error.*
 *.cdz
 *.cds
 
-# certificats du serveur de développement (auto-signé, §HTTPS) —
-# générés par scripts/generer-certificats.sh.
-# cert.pem EST VERSIONNÉ volontairement : c'est la moitié PUBLIQUE de la paire
-# (l'app l'embarque) et les builds EAS (local comme cloud) copient le projet
-# selon .gitignore — un certificat ignoré manquerait au prebuild.
-/key.pem
-/champix-dev.mobileconfig
-certs/
-# cert.pem passe outre le motif global *.pem ci-dessus (voir commentaire).
-!/cert.pem

@@ -25,7 +25,7 @@ modèle classique Expo :
 - `package.json` — `main: "index.ts"` : point d'entrée (résolu par Expo CLI avec les extensions bare).
 - `index.ts` — `registerRootComponent(App)` (doc SDK 58 : registerRootComponent) + pose du verrou d'URL web (`verrouillerUrlRacine`, cf. `web-url-figee.md`).
 - `App.tsx` — composant racine : `SafeAreaProvider` + `Provider` (Redux) + `PersistGate`, rend la fenêtre courante de la pile `src/navigation/navigateur.ts` (cf. `navigation.md`).
-- `app.json` — configuration Expo : nom, slug, plugins `expo-camera`, `expo-build-properties`, `./plugins/certificat-serveur.js` (TLS dev, cf. `serveur-dev-https.md`), icônes, orientation. Plus de plugin `expo-router` ni de `scheme` (aucune URL) — Expo Router a été **retiré** du projet le 2026-11-11 (dépendance, plugin, `src/app/`).
+- `app.json` — configuration Expo : nom, slug, plugins `expo-camera` et `expo-build-properties`, icônes, orientation. Aucun plugin TLS local : le serveur utilise un certificat public (cf. `serveur-https.md`). Plus de plugin `expo-router` ni de `scheme` (aucune URL) — Expo Router a été **retiré** du projet le 2026-11-11 (dépendance, plugin, `src/app/`).
 
 ## Structure actuelle
 
@@ -41,8 +41,7 @@ codEbara/
 │   ├── store/           # Redux Toolkit — tranche utilisateur persistée (store, utilisateur, hooks)
 │   ├── utils/           # Règles métier pures (codes-bar.ts ; hash.ts SHA-256 §3.2 ; motDePasse.ts règle §5.10 ; base64.ts ; cdz.ts ZIP/.cdz §5.3-§6.3 ; figerUrl.ts — URL figée web)
 │   └── data/            # Données de l'app (carte.ts généré)
-├── scripts/             # Outils + contrôles (extraire-carte-svg.mjs, verifier-figer-url.mjs, generer-certificats.sh, maj-notes-version.mjs)
-├── plugins/             # Config plugins locaux (certificat-serveur.js — TLS auto-signé dev, CNG)
+├── scripts/             # Outils + contrôles (extraire-carte-svg.mjs, verifier-figer-url.mjs, maj-notes-version.mjs)
 ├── app.config.ts        # Config dynamique — lit DEBUG → extra.debug (bouton debug)
 ├── .env                 # Variables par défaut versionnées (DEBUG, …)
 ├── app.json             # Config Expo statique (app.config.ts la complète)
@@ -73,4 +72,4 @@ la main — toute configuration native passe par `app.json` et les config plugin
 | Client serveur + cache collection + vérification | [`services-serveur.md`](./services-serveur.md) |
 | Pipeline archives `.cdz` | [`cdz-pipeline.md`](./cdz-pipeline.md) |
 | Visuel 3D de la carte (vitrine, gestes, zoom) | [`visuel-carte-3d.md`](./visuel-carte-3d.md) |
-| Serveur dev HTTPS auto-signé (certificats, plugin) | [`serveur-dev-https.md`](./serveur-dev-https.md) |
+| Serveur HTTPS (certificat public, contrainte DNS IPv4) | [`serveur-https.md`](./serveur-https.md) |

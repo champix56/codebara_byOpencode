@@ -14,7 +14,7 @@ Application mobile Expo / React Native. Cette documentation est le point d'entr�
 | [cdz-pipeline.md](./cdz-pipeline.md) | Lecture/validation des archives .cdz (ZIP, sha256, hashs.json, saisons) |
 | [cds-format.md](./cds-format.md) | Format .cds (saison d'affichage : fond + bâtiments cliquables), sélection serveur, endpoints /season, intégration client v0.0.12 (services/saison.ts) |
 | [visuel-carte-3d.md](./visuel-carte-3d.md) | Visuel 3D vitrine de musée (rotation, inclinaison, reflets, zoom 2 doigts) |
-| [serveur-dev-https.md](./serveur-dev-https.md) | Certificat auto-signé dev (génération, intégration Android/iOS, profil mobileconfig) |
+| [serveur-https.md](./serveur-https.md) | HTTPS du serveur : certificat public, aucune configuration native, contrainte DNS IPv4-only |
 | [development.md](./development.md) | Installation, commandes de dev, vérifications, gestion des dépendances, builds EAS |
 | [conventions.md](./conventions.md) | Principes de code, politique de vérification des docs Expo, règles dures |
 | [screens/](./screens/README.md) | Un fichier Markdown par écran (« fenêtre ») — descriptions délocalisées pour limiter l'usage de tokens |

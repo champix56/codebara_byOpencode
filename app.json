@@ -11,13 +11,7 @@
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Cette application se connecte à un serveur situé sur le réseau local.",
         "NSAppTransportSecurity": {
-          "NSAllowsLocalNetworking": true,
-          "NSExceptionDomains": {
-            "champix.freeboxos.fr": {
-              "NSIncludesSubdomains": false,
-              "NSExceptionAllowsInsecureHTTPLoads": true
-            }
-          }
+          "NSAllowsLocalNetworking": true
         }
       },
       "bundleIdentifier": "com.codebara.game"
@@ -52,8 +46,7 @@
             "usesCleartextTraffic": true
           }
         }
-      ],
-      "./plugins/certificat-serveur.js"
+      ]
     ],
     "extra": {
       "debug": false,

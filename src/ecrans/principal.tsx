@@ -52,6 +52,11 @@ export default function Principal() {
           </Pressable>
         }
       />
+      {saison.nom ? (
+        <Text style={styles.nomSaison} accessibilityLabel={`Saison en cours : ${saison.nom}`}>
+          {`Saison en cours : ${saison.nom}`}
+        </Text>
+      ) : null}
       <CarteInteractive
         viewbox={saison.viewbox}
         zones={saison.zones}
@@ -75,5 +80,12 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: '#1f2937',
     paddingHorizontal: 12,
+  },
+  nomSaison: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+    textAlign: 'center',
+    paddingVertical: 4,
   },
 });

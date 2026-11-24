@@ -3,7 +3,6 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import type { FormatCode } from '../utils/codes-bar';
 import { LIBELLE_FORMAT, detecterFormat, neRetenirQueChiffres, verifierCode } from '../utils/codes-bar';
-import { naviguer } from '../navigation/navigateur';
 import { useAppSelector } from '../store/hooks';
 import FabricationCarte from './fabrication-carte';
 
@@ -161,10 +160,8 @@ export default function UsineEcran() {
       <FabricationCarte
         chiffres={fabrication}
         surFermer={() => definirFabrication(null)}
-        // Enregistrement réussi (nom + archive v2) : redirection vers la
-        // fenêtre détail de la carte (exigence produit 2026-11-15) — la popup
-        // se ferme et la pile empile le détail au-dessus de l'usine.
-        surEnregistree={(carteId) => naviguer({ nom: 'carte', carteId })}
+        // La popup gère elle-même le retour à la principale après validation
+        // (exigence produit 2026-11-24), sur toutes les plateformes.
       />
     </View>
   );

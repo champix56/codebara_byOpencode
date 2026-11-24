@@ -6,6 +6,13 @@ courante embarquée dans l'app (`src/data/notes-version.ts`, généré par
 `npm run maj:notes`). Les nouveautés sont suivies à partir de v0.0.8 ; les
 évolutions antérieures ne sont pas listées.
 
+## v0.0.16
+
+- notifications système sur mobile et sur le web : tu es prévenu dès qu’un message arrive, avec le logo et sa nature, sans le corps du message.
+- Un appui sur une notification ouvre ta Poste (ou la connexion si ta session est terminée), sans changer l’adresse de l’application.
+- Après la fabrication d’une carte, le popup validé te ramène automatiquement à la page principale.
+- Sur le web, la page principale ne s’ouvre plus tant que la saison en cours n’est pas complètement arrivée ; son nom s’affiche en haut de la carte.
+
 ## v0.0.15
 
 - Fabriquer une carte ne t'immobilise plus devant l'usine : la génération se fait en arrière-plan et tu reçois une notification quand elle est prête.

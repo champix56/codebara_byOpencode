@@ -16,6 +16,7 @@ import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
 import CarteDetail from './src/components/carte-detail';
 import EnteteEcran from './src/components/entete-ecran';
+import { useNotificationsSysteme } from './src/hooks/use-notifications-systeme';
 import FenetreVierge from './src/components/fenetre-vierge';
 import MaisonEcran from './src/components/maison-ecran';
 import MaisonVisiteEcran from './src/components/maison-visite-ecran';
@@ -133,6 +134,18 @@ function rendreFenetre(fenetre: Fenetre): ReactNode {
   }
 }
 
+// Monté SOUS PersistGate : le service de notifications lit le store hydraté
+// (session éventuelle) et garde en mémoire le dernier id connecté.
+function Application({ fenetre }: { fenetre: Fenetre }) {
+  useNotificationsSysteme();
+  return (
+    <>
+      <StatusBar style="auto" />
+      <SafeAreaProvider>{rendreFenetre(fenetre)}</SafeAreaProvider>
+    </>
+  );
+}
+
 export default function App() {
   // La pile vit dans le module navigateur (le service api.ts y écrit aussi,
   // hors React) ; l'état local n'est que le miroir de rendu.
@@ -181,8 +194,7 @@ export default function App() {
         {/* SafeAreaProvider : montait implicitement avec expo-router —
             registerRootComponent ne le fait pas (en-têtes + bandeau pub
             lisent useSafeAreaInsets). */}
-        <StatusBar style="auto" />
-      <SafeAreaProvider>{rendreFenetre(fenetre)}</SafeAreaProvider>
+        <Application fenetre={fenetre} />
       </PersistGate>
     </Provider>
   );

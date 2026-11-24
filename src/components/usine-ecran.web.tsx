@@ -3,7 +3,6 @@ import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput,
 import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import { detecterFormat, neRetenirQueChiffres } from '../utils/codes-bar';
-import { naviguer } from '../navigation/navigateur';
 import { useAppSelector } from '../store/hooks';
 import FabricationCarte from './fabrication-carte';
 
@@ -238,10 +237,8 @@ export default function UsineEcranWeb() {
       <FabricationCarte
         chiffres={codeSoumis}
         surFermer={() => setCodeSoumis(null)}
-        // Enregistrement réussi (nom + archive v2) : redirection vers la
-        // fenêtre détail de la carte (exigence produit 2026-11-15) — la popup
-        // se ferme et la pile empile le détail au-dessus de l'usine.
-        surEnregistree={(carteId) => naviguer({ nom: 'carte', carteId })}
+        // La popup gère elle-même le retour à la principale après validation
+        // (exigence produit 2026-11-24), sur toutes les plateformes.
       />
     </KeyboardAvoidingView>
   );

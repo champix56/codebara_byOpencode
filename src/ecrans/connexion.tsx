@@ -140,11 +140,12 @@ const MODE_DEBUG =
   };
 
   // Bouton debug : saute l'authentification, charge le compte GOD dans la tranche
-  // utilisateur persistante puis ouvre la fenêtre principale (aucun token serveur :
-  // les appels protégés resteront inertes tant qu'une vraie session n'existe pas).
+  // utilisateur persistante puis passe par le splash en mode `debug` (aucun
+  // token serveur, aucune carte à récupérer) — mais l'étape saison est gardée,
+  // surtout sur le web où elle doit être complètement arrivée avant la principale.
   const passerAuthentification = () => {
     dispatcher(seConnecter(UTILISATEUR_DEBUG));
-    remplacer({ nom: 'principal' });
+    remplacer({ nom: 'chargement', mode: 'debug' });
   };
 
   return (

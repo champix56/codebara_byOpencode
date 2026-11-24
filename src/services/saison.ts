@@ -3,6 +3,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { getLocales } from 'expo-localization';
 import JSZip from 'jszip';
 import {
+  ErreurApi,
   telechargerSaison,
   verifierSaison,
 } from './api';
@@ -271,9 +272,12 @@ export function saisonAffichageCourante(): AffichageSaison {
 // ─── Chargement complet (appelé par le splash, étape « saison ») ────────────
 
 // Charge et vérifie la saison (flux §5.11) puis remplace l'affichage courant.
-// NE LÈVE JAMAIS : tout incident (réseau, réponse vide, archive illisible)
-// retombe sur la saison embarquée — l'habillage ne doit pas bloquer la
-// connexion. Retourne l'origine retenue (pour le debug/doc).
+// MOBILE : NE LÈVE JAMAIS — tout incident retombe sur la saison embarquée,
+// l'habillage ne doit pas bloquer la connexion.
+// WEB (exigence 2026-11-24) : lève au contraire une `ErreurApi` tant que la
+// saison du serveur n'est pas complètement arrivée — le splash attend et ne
+// doit jamais ouvrir `principal` avec la saison embarquée de secours.
+// Retourne l'origine retenue (pour le debug/doc).
 export async function chargerSaisonAffichage(): Promise<OrigineSaison> {
   const pays = paysDemande();
   try {
@@ -304,7 +308,14 @@ export async function chargerSaisonAffichage(): Promise<OrigineSaison> {
       }
     }
   } catch {
-    // Panne réseau / réponse non conforme : repli (voir ci-dessous).
+    if (Platform.OS === 'web') {
+      throw new ErreurApi('La saison du serveur n’est pas encore disponible.');
+    }
+    // Mobile : panne réseau / réponse non conforme → repli (ci-dessous).
+  }
+  if (Platform.OS === 'web') {
+    // Réponse vide ou archive illisible : pas de repli embarqué sur le web.
+    throw new ErreurApi('La saison du serveur n’est pas encore disponible.');
   }
   affichageCourant = saisonEmbarquee();
   return 'embarquee';

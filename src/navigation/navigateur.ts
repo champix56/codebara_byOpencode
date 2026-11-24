@@ -19,8 +19,10 @@
 export type Fenetre =
   // mode 'auto' : connexion automatique par tokens (splash au démarrage) ;
   // mode 'post-connexion' : splash relancé par le bouton Connexion — étapes
-  // « connexion » puis « récupération des cartes ».
-  | { nom: 'chargement'; mode?: 'post-connexion' }
+  // « connexion » puis « récupération des cartes » ;
+  // mode 'debug' : compte GOD sans tokens — saute auth + cartes, garde l'étape
+  // saison (et son attente sur le web).
+  | { nom: 'chargement'; mode?: 'post-connexion' | 'debug' }
   | { nom: 'connexion' }
   | { nom: 'principal' }
   | { nom: 'usine' }

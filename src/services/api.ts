@@ -3,6 +3,10 @@ import { persistor, store } from '../store/store';
 import { renouvelerRequestToken, seDeconnecter } from '../store/utilisateur';
 import { hacherMotDePasse } from '../utils/hash';
 import { decoderBase64 } from '../utils/base64';
+import {
+  enregistrerDernierIdUser,
+  lireDernierIdUser,
+} from '../utils/dernier-utilisateur';
 
 // Client de l'API pyCodebara2 — contrat : 
 // docs/integration-client.md (projet /home/champix/projets/pyCodebara2).
@@ -257,18 +261,28 @@ function estErreurSession(message: unknown): boolean {
   return typeof message === 'string' && message.includes('Invalid REQUEST TOKEN');
 }
 
-// Route publique : GET /notifications peut être appelé sans token avec
-// `{"iduser": N}` dans le header `datas` (aucun token renvoyé). Un corps sur
-// GET est interdit par le `fetch` de React Native (« Body not allowed for GET
-// or HEAD requests »), qui se traduirait par un faux « Serveur injoignable ».
+// Route publique : `GET /notifications` et `PUT /notifications/{id}/fetched`
+// acceptent `{"iduser": N}` dans le header `datas` sans token (aucun token
+// renvoyé). Un corps sur GET est interdit par le `fetch` de React Native
+// (« Body not allowed for GET or HEAD requests »), qui se traduirait par un
+// faux « Serveur injoignable ».
+type OptionsSansToken = {
+  method?: string;
+  corps?: Record<string, unknown>;
+  iduser?: number | null;
+};
+
 async function appelSansToken(
   chemin: string,
-  donnees: Record<string, unknown>,
+  options: OptionsSansToken,
 ): Promise<Record<string, unknown>> {
+  const { method = 'GET', corps, ...donnees } = options;
+  const sansCorps = method === 'GET' || method === 'HEAD';
   return avecDelai({
     url: `${obtenirUrlBase()}${chemin}`,
-    method: 'GET',
+    method,
     headers: { datas: JSON.stringify(donnees) },
+    ...(corps && !sansCorps ? { body: JSON.stringify(corps) } : {}),
   });
 }
 
@@ -301,7 +315,11 @@ export async function authentifierParLogin(
   if (!apiToken || !requestToken) {
     throw new ErreurApi('Réponse d’authentification incomplète du serveur');
   }
-  return { ...lireUtilisateur(donnees), apiToken, requestToken };
+  const utilisateur = lireUtilisateur(donnees);
+  // Mémoire du dernier joueur connecté, hors tranche Redux purgée à la
+  // déconnexion : sert au polling notifications sans session.
+  await enregistrerDernierIdUser(utilisateur.id);
+  return { ...utilisateur, apiToken, requestToken };
 }
 
 // (b) tokens (reprise de session au démarrage) : données utilisateur seulement,
@@ -319,7 +337,9 @@ export async function authentifierParTokens(
       method: 'GET',
       headers: { datas: JSON.stringify({ API_TOKEN: apiToken, API_REQUEST_TOKEN: requestToken }) },
     });
-    return lireUtilisateur(donnees);
+    const utilisateur = lireUtilisateur(donnees);
+    await enregistrerDernierIdUser(utilisateur.id);
+    return utilisateur;
   } catch (erreur) {
     if (erreur instanceof ErreurApi && estErreurSession(erreur.message)) {
       // Sur /user/auth le couple refusé est un 404 générique ; toute erreur
@@ -773,6 +793,8 @@ export type NotificationServeur = {
   date: string | null;
   type: string;
   state: number;
+  /** Déjà présentée en notification système (ne modifie PAS `state`). */
+  fetched: boolean;
   cardid: number | null;
   /** Présent sur le détail d'une carte achevée (même contenu que GET /card/{id}). */
   card?: string;
@@ -791,6 +813,7 @@ function lireNotification(source: unknown): NotificationServeur | null {
     date: texteValeur(brute, 'date') || null,
     type: texteValeur(brute, 'type'),
     state: nombreValeur(brute, 'state') ?? 0,
+    fetched: brute.fetched === true || brute.fetched === 1,
     cardid: nombreValeur(brute, 'cardid'),
     card: texteValeur(brute, 'card') || undefined,
     checksum: texteValeur(brute, 'checksum') || undefined,
@@ -830,6 +853,24 @@ export async function obtenirNotification(id: number): Promise<NotificationServe
 
 export async function marquerNotificationLue(id: number): Promise<void> {
   await appelProtege(`/notifications/${id}`, { method: 'PUT' });
+}
+
+// Marque la notification comme « déjà présentée » par la notification système.
+// Route dédiée : contrairement à `PUT /notifications/{id}`, elle ne touche PAS
+// au champ `state` (lu/non lu) que la Poste gère seule à l'ouverture.
+// Sans session, le dernier id connecté persistant autorise le même appel.
+export async function marquerNotificationFetchee(id: number): Promise<void> {
+  const connecte = store.getState().utilisateur.apiToken !== null;
+  if (connecte) {
+    await appelProtege(`/notifications/${id}/fetched`, { method: 'PUT' });
+    return;
+  }
+  const dernierId = await lireDernierIdUser();
+  if (dernierId === null) return;
+  await appelSansToken(`/notifications/${id}/fetched`, {
+    method: 'PUT',
+    iduser: dernierId,
+  });
 }
 
 export async function obtenirCarteEnAttente(

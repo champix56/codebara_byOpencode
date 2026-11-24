@@ -15,6 +15,7 @@ import {
   telechargerCarte,
 } from '../services/api';
 import { enregistrerCarte, majIndex } from '../services/collection';
+import { remplacer } from '../navigation/navigateur';
 import { cdzDepuisBase64, ouvrirCdz, type Cdz } from '../utils/cdz';
 import VisuelCarte from './visuel-carte';
 
@@ -32,8 +33,9 @@ import VisuelCarte from './visuel-carte';
 //  5) PUT /card/name {cid, name} (§5.7) → nouvelle archive → validation
 //     interne (ZIP uniquement — le tar.xz du bug §5.7 est refusé, la v1 reste
 //     en cache) → remplacement de la v1 par la v2 + maj de l'index du nom.
-//  6) redirection du joueur vers la fenêtre détail de la carte (celle ouverte
-//     depuis la maison) — exigence produit 2026-11-15.
+//  6) retour systématique à la fenêtre principale dès que le popup est validé
+//     (nom envoyé ou message « Compris »), sur mobile comme sur web — exigence
+//     produit 2026-11-24.
 type Etape =
   | { phase: 'generer' }
   | { phase: 'eclosion'; carteId: number; cdz: Cdz }
@@ -43,13 +45,16 @@ type Etape =
 type Props = {
   chiffres: string | null;
   surFermer: () => void;
-  // Appelé après l'enregistrement complet (v2 stockée + index) — le parent
-  // redirige (fenêtre détail de la carte, exigence produit 2026-11-15) et
-  // ferme la popup.
-  surEnregistree?: (carteId: number, nom: string) => void;
 };
 
-export default function FabricationCarte({ chiffres, surFermer, surEnregistree }: Props) {
+// Ferme la popup puis revient au hub du jeu — unique sortie « validée », commune
+// aux deux plateformes et aux deux chemins (carte nommée / génération différée).
+function retournerALaPrincipale(surFermer: () => void): void {
+  surFermer();
+  remplacer({ nom: 'principal' });
+}
+
+export default function FabricationCarte({ chiffres, surFermer }: Props) {
   const idUser = useAppSelector((etat) => etat.utilisateur.idUser);
   const sessionActive = useAppSelector((etat) => etat.utilisateur.apiToken !== null);
 
@@ -130,8 +135,8 @@ export default function FabricationCarte({ chiffres, surFermer, surEnregistree }
         id: etape.cdz.datas.seasonid,
         nom: etape.cdz.datas.saison,
       });
-      if (monteRef.current) surEnregistree?.(carteId, nom.trim());
-      surFermer();
+      if (monteRef.current) retournerALaPrincipale(surFermer);
+      else surFermer();
     } catch (erreur) {
       const brut = (erreur as Error).message;
       const message = /non-ZIP|invalide/i.test(brut)
@@ -194,7 +199,10 @@ export default function FabricationCarte({ chiffres, surFermer, surEnregistree }
                 Le serveur prépare son fichier. Vous recevrez une notification dans la Poste
                 une fois la génération terminée — acceptez ou refusez la carte à ce moment-là.
               </Text>
-              <Pressable style={styles.bouton} onPress={surFermer}>
+              <Pressable
+                style={styles.bouton}
+                onPress={() => retournerALaPrincipale(surFermer)}
+              >
                 <Text style={styles.boutonTexte}>Compris</Text>
               </Pressable>
             </View>

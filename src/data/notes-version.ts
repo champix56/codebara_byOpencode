@@ -1,14 +1,23 @@
 // GÉNÉRÉ par scripts/maj-notes-version.mjs — NE PAS ÉDITER À LA MAIN.
 // Source maintenue : NOTES-VERSION.md (racine) — npm run maj:notes après édition.
 // VERSION_APPLI = première section du md (la plus récente) ; affichée en jeu
-// sous le bandeau publicitaire (« CodEbara v0.0.15 ») et
+// sous le bandeau publicitaire (« CodEbara v0.0.16 ») et
 // consommée par la fenêtre notes de version.
 
-export const VERSION_APPLI = '0.0.15';
+export const VERSION_APPLI = '0.0.16';
 
 export type NoteVersion = { version: string; lignes: string[] };
 
 export const NOTES_VERSION: NoteVersion[] = [
+  {
+    "version": "v0.0.16",
+    "lignes": [
+      "notifications système sur mobile et sur le web : tu es prévenu dès qu’un message arrive, avec le logo et sa nature, sans le corps du message.",
+      "Un appui sur une notification ouvre ta Poste (ou la connexion si ta session est terminée), sans changer l’adresse de l’application.",
+      "Après la fabrication d’une carte, le popup validé te ramène automatiquement à la page principale.",
+      "Sur le web, la page principale ne s’ouvre plus tant que la saison en cours n’est pas complètement arrivée ; son nom s’affiche en haut de la carte."
+    ]
+  },
   {
     "version": "v0.0.15",
     "lignes": [

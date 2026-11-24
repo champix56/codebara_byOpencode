@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Image,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -15,7 +16,7 @@ import {
   type CarteCorrompue,
   type PhaseVerification,
 } from '../services/verification';
-import { chargerSaisonAffichage } from '../services/saison';
+import { chargerSaisonAffichage, type OrigineSaison } from '../services/saison';
 import { useAppDispatch } from '../store/hooks';
 import { store } from '../store/store';
 import { seConnecter, seDeconnecter } from '../store/utilisateur';
@@ -30,7 +31,9 @@ import { seConnecter, seDeconnecter } from '../store/utilisateur';
 //    échec ou refus → fenêtre connexion.
 //  - 'post-connexion' (bouton Connexion de la fenêtre connexion) : le splash
 //    est remis, étape « connexion » (déjà validée) puis « récupération des
-//    cartes ».
+//    cartes » ;
+//  - 'debug' (bouton GOD) : session locale sans tokens, on saute la connexion
+//    et la récupération des cartes, mais PAS l'étape saison (surtout sur web).
 //
 // Après la connexion : vérification + remplissage du stockage local des .cdz
 // (exigence produit 2026-11-17, cf. services/verification.ts) sous le libellé
@@ -41,7 +44,7 @@ import { seConnecter, seDeconnecter } from '../store/utilisateur';
 // action n'est requise de sa part). Puis étape « saison d'affichage »
 // (.cds local vérifié via /season/check ou GET /season — repli saison
 // embarquée, cf. services/saison.ts). Succès complet → fenêtre principale.
-type Mode = 'auto' | 'post-connexion';
+type Mode = 'auto' | 'post-connexion' | 'debug';
 
 type Props = { mode?: Mode };
 
@@ -51,10 +54,16 @@ type AnnonceCorrompues = CarteCorrompue[];
 // Temps minimal d'affichage d'un libellé (lisibilité des étapes du splash).
 const PAUSE_ETAPE_MS = 900;
 
+// Web : la saison du serveur doit être complètement arrivée avant d'ouvrir la
+// principale. On attend par petites passes (≈30 s au total) avant de proposer
+// un bouton « Réessayer » — jamais de repli sur la saison embarquée ici.
+const DELAI_ATTENTE_SAISON_MS = 3_000;
+const TENTATIVES_SAISON_WEB = 10;
+
 export default function Chargement({ mode = 'auto' }: Props) {
   const dispatcher = useAppDispatch();
   const [libelle, definirLibelle] = useState(
-    mode === 'post-connexion' ? 'connexion' : 'tentative de connexion auto',
+    mode === 'auto' ? 'tentative de connexion auto' : 'connexion',
   );
   const [progression, definirProgression] = useState<{
     phase: PhaseVerification;
@@ -75,7 +84,7 @@ export default function Chargement({ mode = 'auto' }: Props) {
     definirFraction(0.1);
 
     // ── Étape 1 : connexion ────────────────────────────────────────────────
-    definirLibelle(mode === 'post-connexion' ? 'connexion' : 'tentative de connexion auto');
+    definirLibelle(mode === 'auto' ? 'tentative de connexion auto' : 'connexion');
     definirFraction(0.1);
     const debutEtape = Date.now();
     const utilisateur = store.getState().utilisateur;
@@ -114,8 +123,12 @@ export default function Chargement({ mode = 'auto' }: Props) {
         remplacer({ nom: 'connexion' });
         return;
       }
-    } else if (!utilisateur.apiToken || !utilisateur.requestToken) {
+    } else if (
+      mode !== 'debug' &&
+      (!utilisateur.apiToken || !utilisateur.requestToken)
+    ) {
       // Garde-fou : le mode post-connexion suppose une session toute fraîche.
+      // Le mode debug (GOD) n'a volontairement aucun token serveur.
       remplacer({ nom: 'connexion' });
       return;
     }
@@ -130,46 +143,74 @@ export default function Chargement({ mode = 'auto' }: Props) {
     if (reste > 0) await new Promise((r) => setTimeout(r, reste));
 
     // ── Étape 2 : récupération des cartes ─────────────────────────────────
-    definirLibelle('récupération des cartes');
-    const deplacement = (phase: PhaseVerification, faites: number, total: number) => {
-      definirProgression({ phase, faites, total });
-      const part = total > 0 ? faites / total : 1;
-      definirFraction(phase === 'verification' ? 0.35 + part * 0.3 : 0.7 + part * 0.27);
-    };
-    // Cartes corrompues remontées par le service (copie locale, l'état React
-    // ne serait pas lisible de façon synchrone juste après l'await).
+    // Compte debug (GOD, sans tokens) : aucune carte serveur à récupérer.
     let corrompues: CarteCorrompue[] = [];
-    try {
-      await verifierEtRecuperer(idUser, {
-        // Les corrompues (supprimées + re-téléchargées par le service) sont
-        // annoncées à la fin — le parcours ne s'arrête plus par carte.
-        surCorrompues: (cartes) => {
-          corrompues = cartes;
-          if (cartes.length > 0) definirCorrompues(cartes);
-        },
-        surProgression: deplacement,
-      });
-    } catch (l_erreur) {
-      if (l_erreur instanceof ErreurSession) {
-        // Session morte pendant la vérification : le service a déjà réinitialisé
-        // le store et déclenché la connexion — rien à afficher.
+    if (mode !== 'debug') {
+      definirLibelle('récupération des cartes');
+      const deplacement = (phase: PhaseVerification, faites: number, total: number) => {
+        definirProgression({ phase, faites, total });
+        const part = total > 0 ? faites / total : 1;
+        definirFraction(phase === 'verification' ? 0.35 + part * 0.3 : 0.7 + part * 0.27);
+      };
+      try {
+        await verifierEtRecuperer(idUser, {
+          // Les corrompues (supprimées + re-téléchargées par le service) sont
+          // annoncées à la fin — le parcours ne s'arrête plus par carte.
+          surCorrompues: (cartes) => {
+            // On garde la liste mais on n'affiche la modal qu'APRÈS l'étape
+            // saison : son bouton OK navigue vers la principale, qui doit rester
+            // inaccessible sur le web tant que la saison serveur n'est pas là.
+            corrompues = cartes;
+          },
+          surProgression: deplacement,
+        });
+      } catch (l_erreur) {
+        if (l_erreur instanceof ErreurSession) {
+          // Session morte pendant la vérification : le service a déjà réinitialisé
+          // le store et déclenché la connexion — rien à afficher.
+          return;
+        }
+        definirErreur((l_erreur as Error).message);
         return;
       }
-      definirErreur((l_erreur as Error).message);
-      return;
     }
     // ── Étape 3 : saison d'affichage ──────────────────────────────────────
-    // .cds local vérifié par /season/check (mobile), /season sinon — repli
-    // saison embarquée sur tout incident (ne bloque JAMAIS la connexion,
-    // cf. services/saison.ts). Lancée AVANT la modal des corrompues : celle-ci
-    // navigue directement vers la fenêtre principale.
+    // Lancée AVANT la modal des corrompues : celle-ci navigue directement vers
+    // la fenêtre principale. Mobile : .cds local vérifié par /season/check,
+    // avec repli embarqué sur incident (ne bloque JAMAIS la connexion).
+    // Web : GET /season jusqu'à ce que la saison serveur soit complète —
+    // `chargerSaisonAffichage` lève sinon, et on attend sans jamais ouvrir la
+    // principale avec le décor de secours.
     definirLibelle('saison d\'affichage');
     definirFraction(0.98);
-    await chargerSaisonAffichage();
+    if (Platform.OS === 'web') {
+      let origine: OrigineSaison | null = null;
+      for (let tentative = 0; tentative < TENTATIVES_SAISON_WEB; tentative++) {
+        try {
+          origine = await chargerSaisonAffichage();
+          if (origine === 'serveur') break;
+        } catch {
+          origine = null;
+        }
+        if (tentative < TENTATIVES_SAISON_WEB - 1) {
+          definirLibelle('attente de la saison');
+          await new Promise((r) => setTimeout(r, DELAI_ATTENTE_SAISON_MS));
+        }
+      }
+      if (origine !== 'serveur') {
+        definirErreur('La saison n’est pas encore arrivée — réessaie dans un instant.');
+        return;
+      }
+    } else {
+      await chargerSaisonAffichage();
+    }
 
     // Modal d'avertissement d'abord (OK = unique action), puis fenêtre
     // principale — sinon navigation directe.
-    if (corrompues.length > 0) return;
+    if (corrompues.length > 0) {
+      definirCorrompues(corrompues);
+      return;
+    }
     remplacer({ nom: 'principal' });
   }, [dispatcher, mode]);
 

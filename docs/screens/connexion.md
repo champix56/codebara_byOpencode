@@ -26,14 +26,14 @@ Fenêtre **triple** : connexion, création de compte et **renouvellement du mot 
 - **Mode création** → `creerCompte(mail)` : `POST /user {"mail": …}` sans header `datas` (§5.1). Succès : message « Compte créé… » — le serveur génère le mot de passe et l'envoie par e-mail (dépend de sa config ; en `DEBUG=True` rien n'est envoyé, §12.1) — retour au mode connexion. Refus métier = **403 `Forbidden`** (mail mal formé OU compte déjà existant, cas volontairement confondus — contrat §4/dis 2026-10-30) → « Création refusée : vérifie cette adresse… ».
 - **Mode oublié** → `renouvelerMotDePasse(mail)` : `POST /user/renew-password {"mail"}` (§5.9, sans tokens). Succès `{"renewed": true}` **sans token** — aucune rotation. Échec = **403 `Forbidden`** ambigu (mail mal formé OU compte inconnu — **pas d'oracle d'existence de compte**) → l'écran affiche le même message ambigu que le succès : « Si ce compte existe, un courriel avec le nouveau mot de passe vient de partir. » Le serveur écrit le nouveau mot de passe (SHA2(mail+clair)) et l'envoie par e-mail ; avec le serveur en `DEBUG=True`, l'e-mail n'est pas envoyé (mot de passe imprimé dans le log du serveur). Retour au mode connexion après soumission.
 - Erreur « Invalid REQUEST TOKEN » impossible sur ces routes (§5.2/§5.9) — pas de gestion implicite ici.
-- **Bouton debug** (Notes) : `dispatch(seConnecter(UTILISATEUR_DEBUG))` — id `-9999`, nickname `GOD`, hash `null`, **tokens `null` (pas de session)** — puis principal sans vérification.
+- **Bouton debug** (Notes) : `dispatch(seConnecter(UTILISATEUR_DEBUG))` — id `-9999`, nickname `GOD`, hash `null`, **tokens `null` (pas de session)** — puis splash en mode `debug` (v0.0.16) : ni authentification ni récupération de cartes, mais l'étape saison reste obligatoire (attente du serveur sur web) avant le principal.
 
 ## Navigation
 
 - Arrivée : après `remplacer({ nom: 'connexion' })` déclenché par l'écran de chargement — le splash n'est plus dans la pile, retour arrière impossible vers lui.
 - Le lien bascule le mode en place (aucun changement de fenêtre) ; le mail saisi est conservé.
 - Connexion réussie : `remplacer({ nom: 'chargement', mode: 'post-connexion' })` — sortie de pile (le splash relancé mène ensuite au principal).
-- Bouton debug : `remplacer({ nom: 'principal' })` — sortie de pile directe (sans session serveur : pas de vérification de cartes).
+- Bouton debug : `remplacer({ nom: 'chargement', mode: 'debug' })` — sortie de pile vers le splash allégé, qui garde l'étape saison (surtout sur web).
 - Aucune barre d'en-tête sur cette fenêtre (plein écran).
 
 ## Notes

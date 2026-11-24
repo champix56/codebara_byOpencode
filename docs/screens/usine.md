@@ -22,10 +22,10 @@ Scanner de codes-barres produits (EAN-8, EAN-13, UPC-A, UPC-E via caméra ; + UP
 
 ### Popup « fabrication » (Modal, partagée natif/web)
 
-- **Demande envoyée** (chemin normal depuis 2026-11-24) : « Carte #id créée — vous recevrez une notification dans la Poste une fois la génération terminée » + « Compris ». Aucun fichier n'est écrit localement ici.
+- **Demande envoyée** (chemin normal depuis 2026-11-24) : « Carte #id créée — vous recevrez une notification dans la Poste une fois la génération terminée » + « Compris ». Aucun fichier n'est écrit localement ici. **Depuis v0.0.16, « Compris » renvoie systématiquement à la fenêtre principale** (natif et web).
 - **Génération** (ancien mode synchrone `TEST`, toléré) : spinner vert + « Génération en cours — … jusqu'à 2 minutes » (fermeture non proposée pendant l'attente).
 - **Éclosion** (ancien mode synchrone, toléré) : titre « Éclosion — carte #id », **visuel 3D en vitrine de musée pleine largeur** (`visuel-carte.tsx`, carte 220 px), champ « Nom de la carte » (obligatoire), bouton « Envoyer le nom ».
-- La remise de la carte (visuel 3D + stats + nom optionnel) se fait désormais dans la fenêtre [poste](./poste.md), pas dans l'usine.
+- La remise de la carte (visuel 3D + stats + nom optionnel) se fait désormais dans la fenêtre [poste](./poste.md), pas dans l'usine. Si l'ancien mode synchrone est tout de même rencontré, l'envoi du nom valide la popup et **renvoie lui aussi à la principale** (v0.0.16).
 - **Erreur** : titre « Échec de fabrication », message rouge, bouton gris « Fermer ».
 
 ## États
@@ -40,7 +40,7 @@ Scanner de codes-barres produits (EAN-8, EAN-13, UPC-A, UPC-E via caméra ; + UP
 ## Navigation
 
 - Entrée : tap la zone usine sur la carte (fenêtre principale).
-- Sortie : bouton retour de la barre d'en-tête maison → `retourner()` (dépile vers la fenêtre principale) ; la fermeture de la popup ne quitte pas la fenêtre. Depuis 2026-11-24, aucune redirection automatique vers le détail carte : le joueur récupère sa carte depuis la **Poste**.
+- Sortie : bouton retour de la barre d'en-tête maison → `retourner()` (dépile vers la fenêtre principale) ; la fermeture simple de la popup (croix / « Fermer » en erreur) ne quitte pas la fenêtre. Depuis 2026-11-24, aucune redirection vers le détail carte : le joueur récupère sa carte depuis la **Poste**. Depuis v0.0.16, une **validation** de la popup (« Compris » ou « Envoyer le nom » réussi) appelle `remplacer({ nom: 'principal' })` sur les deux plateformes.
 
 ## Notes
 

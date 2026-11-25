@@ -6,6 +6,12 @@ courante embarquée dans l'app (`src/data/notes-version.ts`, généré par
 `npm run maj:notes`). Les nouveautés sont suivies à partir de v0.0.8 ; les
 évolutions antérieures ne sont pas listées.
 
+## v0.0.18
+
+- Les notifications continuent d'arriver quand l'appli est fermée : le téléphone interroge le serveur pour le dernier joueur connecté, sans utiliser ni consommer tes tokens de session.
+- Chaque notification joue un son et fait vibrer, que l'appli soit ouverte ou non.
+- Sur navigateur, le service worker tente le même suivi lorsque l'onglet est fermé, selon les possibilités du navigateur.
+
 ## v0.0.17
 
 - La version de l'app s'affiche aussi sur la fenêtre de connexion ; un appui dessus ouvre les notes de version, comme depuis la principale.

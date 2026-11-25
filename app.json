@@ -54,7 +54,8 @@
           "color": "#43a047",
           "enableRemoteNotifications": false
         }
-      ]
+      ],
+      "expo-background-task"
     ],
     "extra": {
       "debug": false,

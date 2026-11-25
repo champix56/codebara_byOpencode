@@ -6,6 +6,9 @@
 // construction des fenêtres repart de `App.tsx` et de la pile de navigation
 // (src/navigation/navigateur.ts).
 import { registerRootComponent } from 'expo';
+// Importé pour son effet de bord : la tâche de notifications doit être définie
+// au chargement du bundle pour que le système puisse l'exécuter sans interface.
+import './src/tasks/notifications-background';
 import App from './App';
 import { verrouillerUrlRacine } from './src/utils/figerUrl';
 

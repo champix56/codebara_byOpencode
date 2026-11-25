@@ -7,9 +7,11 @@ import {
 } from '../services/api';
 import {
   afficherNotificationSysteme,
+  enregistrerIdUserServiceWorker,
   installerClicNotification,
   preparerNotificationsSysteme,
 } from '../services/notifications-plateforme';
+import { enregistrerTacheNotifications } from '../tasks/notifications-background';
 import {
   estRetourBloque,
   fenetreCourante,
@@ -27,7 +29,9 @@ import {
 // l'application sous PersistGate. Toutes les 30 s tant que l'app est active,
 // on interroge GET /notifications ; seules les notifications non encore
 // « fetched » côté serveur sont présentées, puis marquées comme telles (sans
-// changer leur état lu/non lu dans la Poste).
+// changer leur état lu/non lu dans la Poste). Quand l'app est fermée, le relais
+// est pris par la tâche native (src/tasks/) ou le service worker web — toujours
+// avec `iduser` seul, jamais avec un token.
 const INTERVALLE_INTERROGATION_MS = 30_000;
 
 // Mémoire de session : évite un doublage si le marquage serveur échoue.
@@ -93,6 +97,9 @@ export function useNotificationsSysteme(): void {
     let interrogationEnCours = false;
 
     void preparerNotificationsSysteme().catch(() => undefined);
+    // Mobile : la tâche native survit à la fermeture de l'app. Web : no-op, le
+    // service worker enregistre son propre `periodicsync` plus haut.
+    void enregistrerTacheNotifications().catch(() => undefined);
     const desinstallerClic = installerClicNotification(() => {
       void traiterClicNotification();
     });
@@ -114,6 +121,9 @@ export function useNotificationsSysteme(): void {
             ? utilisateur.idUser
             : await lireDernierIdUser();
         if (idUser === null) return;
+        // Le service worker web mémorise le dernier joueur pour son propre
+        // passage en arrière-plan ; aucun token ne lui est confié.
+        void enregistrerIdUserServiceWorker(idUser);
         const notifications = await listerNotifications(idUser);
         for (const notification of notifications) {
           if (notification.fetched) continue;

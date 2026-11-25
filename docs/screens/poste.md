@@ -24,7 +24,7 @@ Messagerie du joueur (§5.15 du contrat serveur). Depuis le 2026-11-24, `POST /c
 - Refus : `DELETE /awaiting_cards/{id}` (supprime ligne miroir, `.cdz`, tâche JSON, notification) ; même chose automatiquement à l'ouverture d'une notification d'échec.
 - Erreurs (archive illisible, réseau…) : message rouge ; l'archive illisible n'empêche pas l'acceptation/refus (le re-téléchargement se fait via la réponse POST). Garde-fous anti setState après démontage (`monte`).
 
-## Notifications système (v0.0.16)
+## Notifications système (v0.0.16, arrière-plan v0.0.18)
 
 Service global monté une seule fois dans `App.tsx` sous `PersistGate`
 (`src/hooks/use-notifications-systeme.ts`, hook `useNotificationsSysteme`), indépendant de la fenêtre courante :
@@ -41,6 +41,11 @@ Service global monté une seule fois dans `App.tsx` sous `PersistGate`
 - Mobile : `expo-notifications` (canal Android `codebara-notifications`, icône
   monochrome et couleur vert #43a047 dans `app.json`). Web : API `Notification`
   du navigateur + `public/service-worker.js`, sans changement d'URL.
+- Depuis v0.0.18, quand l'app/onglet est fermé, une tâche native (mobile) ou le
+  `periodicsync` du service worker (web) interroge le serveur avec le dernier
+  `iduser` seul : **aucun token n'est envoyé ni consommé**. Les notifications
+  affichées jouent un son et font vibrer. Détails et limites :
+  [`notifications.md`](../notifications.md).
 - Clic : session active → `poste` ; sinon tentative d'auto-connexion par tokens,
   puis `poste` si succès, `connexion` sinon. Le clic est une action explicite :
   il force le remplacement même si le retour est verrouillé par une carte en

@@ -13,6 +13,7 @@ Vue d'ensemble — chaque logique détaillée vit dans son propre fichier (voir
 | TypeScript | ~6.0.3 | Typage statique |
 | jszip | 3.10.2 | Lecture des archives `.cdz` (ZIP §5.3) — caractères pure JS |
 | expo-file-system | ~58 | Cache collection `<idUser>/<id>.cdz` (§6.6, natif ; web → IndexedDB custom) |
+| expo-background-task + expo-task-manager | ~58 | Notifications quand l'app est fermée (natif, `iduser` seul, aucun token) — cf. `notifications.md` |
 | @zxing/browser + @zxing/library | 0.2.1 / 0.23.0 | **Web uniquement** — scan caméra de codes-barres à l'usine (natif reste sur expo-camera) |
 | `NOTES-VERSION.md` + `npm run maj:notes` | — | Source des notes de version + version embarquée (`src/data/notes-version.ts` généré, cf. `screens/notes-version.md`) |
 | @redux-devtools/remote | ^1.0.1 | DevTools natif (dev) — cf. `etat-global.md` |
@@ -23,9 +24,9 @@ L'app est une **SPA sans router et sans URL** (exigence produit 2026-11-11) —
 modèle classique Expo :
 
 - `package.json` — `main: "index.ts"` : point d'entrée (résolu par Expo CLI avec les extensions bare).
-- `index.ts` — `registerRootComponent(App)` (doc SDK 58 : registerRootComponent) + pose du verrou d'URL web (`verrouillerUrlRacine`, cf. `web-url-figee.md`).
+- `index.ts` — importe la tâche de notifications pour son effet de bord (définition avant tout montage), `registerRootComponent(App)` (doc SDK 58 : registerRootComponent) + pose du verrou d'URL web (`verrouillerUrlRacine`, cf. `web-url-figee.md`).
 - `App.tsx` — composant racine : `SafeAreaProvider` + `Provider` (Redux) + `PersistGate`, rend la fenêtre courante de la pile `src/navigation/navigateur.ts` (cf. `navigation.md`).
-- `app.json` — configuration Expo : nom, slug, plugins `expo-camera` et `expo-build-properties`, icônes, orientation. Aucun plugin TLS local : le serveur utilise un certificat public (cf. `serveur-https.md`). Plus de plugin `expo-router` ni de `scheme` (aucune URL) — Expo Router a été **retiré** du projet le 2026-11-11 (dépendance, plugin, `src/app/`).
+- `app.json` — configuration Expo : nom, slug, plugins `expo-camera`, `expo-build-properties`, `expo-notifications` et `expo-background-task`, icônes, orientation. Aucun plugin TLS local : le serveur utilise un certificat public (cf. `serveur-https.md`). Plus de plugin `expo-router` ni de `scheme` (aucune URL) — Expo Router a été **retiré** du projet le 2026-11-11 (dépendance, plugin, `src/app/`).
 
 ## Structure actuelle
 
@@ -37,7 +38,9 @@ codEbara/
 │   ├── ecrans/           # Écrans racine : chargement (entrée), connexion, principal
 │   ├── navigation/       # navigateur.ts — pile de fenêtres en mémoire (AUCUNE route)
 │   ├── components/       # carte-interactive, bandeau-pub, menu-lateral, fenetre-vierge, entete-ecran, usine-ecran(.web), fabrication-carte, maison-ecran, carte-detail, visuel-carte, mairie-ecran
-│   ├── services/        # api.ts (client HTTP serveur) + collection.ts (cache .cdz + index nom/saison par utilisateur) + verification.ts (hash cache ↔ serveur)
+│   ├── services/        # api.ts (client HTTP serveur) + collection.ts (cache .cdz + index nom/saison par utilisateur) + verification.ts (hash cache ↔ serveur) + notifications-plateforme(.web).ts
+│   ├── tasks/           # notifications-background(.web).ts — relais natif quand l'app est fermée
+│   ├── hooks/           # use-notifications-systeme.ts (polling actif, clic, enregistrement des relais)
 │   ├── store/           # Redux Toolkit — tranche utilisateur persistée (store, utilisateur, hooks)
 │   ├── utils/           # Règles métier pures (codes-bar.ts ; hash.ts SHA-256 §3.2 ; motDePasse.ts règle §5.10 ; base64.ts ; cdz.ts ZIP/.cdz §5.3-§6.3 ; figerUrl.ts — URL figée web)
 │   └── data/            # Données de l'app (carte.ts généré)
@@ -48,6 +51,7 @@ codEbara/
 ├── tsconfig.json        # TypeScript (strict)
 ├── expo-env.d.ts        # Types d'assets (auto-généré par expo, non versionné)
 ├── assets/              # Icônes (œuf), favicon, splash + assets/carte/ (PNP extraits du SVG)
+├── public/              # service-worker.js (notifications web) + notification.wav (son)
 ├── .opencode/           # Configuration OpenCode (agents, commands, skills)
 ├── .claude/             # Plugins Claude
 └── docs/                # Cette documentation
@@ -70,6 +74,7 @@ la main — toute configuration native passe par `app.json` et les config plugin
 | Web — URL figée à la racine | [`web-url-figee.md`](./web-url-figee.md) |
 | État global Redux (store, tokens, devtools, déconnexion) | [`etat-global.md`](./etat-global.md) |
 | Client serveur + cache collection + vérification | [`services-serveur.md`](./services-serveur.md) |
+| Notifications système (polling, arrière-plan, son/vibration) | [`notifications.md`](./notifications.md) |
 | Pipeline archives `.cdz` | [`cdz-pipeline.md`](./cdz-pipeline.md) |
 | Visuel 3D de la carte (vitrine, gestes, zoom) | [`visuel-carte-3d.md`](./visuel-carte-3d.md) |
 | Serveur HTTPS (certificat public, contrainte DNS IPv4) | [`serveur-https.md`](./serveur-https.md) |

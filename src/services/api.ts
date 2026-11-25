@@ -873,6 +873,30 @@ export async function marquerNotificationFetchee(id: number): Promise<void> {
   });
 }
 
+// Tâche en arrière-plan : jamais de token, même si une session est hydratée.
+// Le header `datas` ne porte que `iduser` : le serveur ne renvoie donc aucun
+// nouveau token et ne consomme pas la chaîne de rotation en cours.
+export async function listerNotificationsSansToken(
+  idUser: number,
+): Promise<NotificationServeur[]> {
+  const donnees = await appelSansToken('/notifications', { iduser: idUser });
+  const brut = donnees.notifications;
+  if (!Array.isArray(brut)) {
+    throw new ErreurApi('Réponse notifications inattendue du serveur');
+  }
+  return brut.map(lireNotification).filter((n): n is NotificationServeur => n !== null);
+}
+
+export async function marquerNotificationFetcheeSansToken(
+  id: number,
+  idUser: number,
+): Promise<void> {
+  await appelSansToken(`/notifications/${id}/fetched`, {
+    method: 'PUT',
+    iduser: idUser,
+  });
+}
+
 export async function obtenirCarteEnAttente(
   carteId: number,
 ): Promise<CarteTelechargee & { reception?: { state: string; cb: string } }> {

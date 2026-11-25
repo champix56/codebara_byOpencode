@@ -11,6 +11,7 @@ Application mobile Expo / React Native. Cette documentation est le point d'entr�
 | [web-url-figee.md](./web-url-figee.md) | Verrou d'URL web à la racine (figerUrl.ts), notes web annexes |
 | [etat-global.md](./etat-global.md) | Redux Toolkit : store persisté, tranche utilisateur (tokens), DevTools, déconnexion |
 | [services-serveur.md](./services-serveur.md) | api.ts (client HTTP, tokens rotatifs, sessions), collection.ts (cache .cdz), verification.ts |
+| [notifications.md](./notifications.md) | Notifications système : polling actif, tâche native fermée, service worker web, son/vibration, limites |
 | [cdz-pipeline.md](./cdz-pipeline.md) | Lecture/validation des archives .cdz (ZIP, sha256, hashs.json, saisons) |
 | [cds-format.md](./cds-format.md) | Format .cds (saison d'affichage : fond + bâtiments cliquables), sélection serveur, endpoints /season, intégration client v0.0.12 (services/saison.ts) |
 | [visuel-carte-3d.md](./visuel-carte-3d.md) | Visuel 3D vitrine de musée (rotation, inclinaison, reflets, zoom 2 doigts) |

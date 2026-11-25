@@ -6,6 +6,7 @@ import { Platform } from 'react-native';
 // Le web résout `notifications-plateforme.web.ts` (API Notification du
 // navigateur + service worker) : `expo-notifications` ne couvre pas le web.
 const CANAL = 'codebara-notifications';
+const VIBRATION = [0, 250, 250, 250];
 
 export type NotificationAffichable = {
   id: number;
@@ -18,29 +19,56 @@ function idDepuisReponse(reponse: Notifications.NotificationResponse | null): nu
   return typeof brut === 'number' ? brut : null;
 }
 
-export async function preparerNotificationsSysteme(): Promise<void> {
-  // SDK 58 : sans handler explicite, la notification foreground est déjà
-  // affichée par défaut ; on le pose quand même pour un comportement stable.
+// Sans demande de permission : appellable au chargement du bundle, y compris
+// quand la tâche en arrière-plan réveille l'app sans montage de l'interface.
+export function configurerNotificationsSysteme(): void {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowBanner: true,
       shouldShowList: true,
-      shouldPlaySound: false,
+      // Sur Android, `false` empêche aussi le bandeau de s'afficher et annule
+      // le son du canal : on laisse le son système jouer.
+      shouldPlaySound: true,
       shouldSetBadge: false,
     }),
   });
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync(CANAL, {
-      name: 'Notifications CodEbara',
-      importance: AndroidImportance.DEFAULT,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#43a047',
-    });
-  }
+}
+
+async function configurerCanal(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync(CANAL, {
+    name: 'Notifications CodEbara',
+    importance: AndroidImportance.HIGH,
+    sound: 'default',
+    enableVibrate: true,
+    vibrationPattern: VIBRATION,
+    lightColor: '#43a047',
+  });
+}
+
+export async function preparerNotificationsSysteme(): Promise<void> {
+  configurerNotificationsSysteme();
+  await configurerCanal();
   const permission = await Notifications.getPermissionsAsync();
   if (permission.status !== 'granted') {
-    await Notifications.requestPermissionsAsync();
+    await Notifications.requestPermissionsAsync({
+      ios: { allowAlert: true, allowSound: true, allowBadge: false },
+    });
   }
+}
+
+// Préparation minimale pour la tâche en arrière-plan : handler + canal, sans
+// prompte (impossible hors interface). Les permissions sont celles accordées
+// lors d'un lancement normal de l'app.
+export async function preparerNotificationsArrierePlan(): Promise<void> {
+  configurerNotificationsSysteme();
+  await configurerCanal();
+}
+
+// Le service worker est une particularité web : côté natif, le dernier id est
+// déjà mémorisé par AsyncStorage pour la tâche en arrière-plan.
+export async function enregistrerIdUserServiceWorker(idUser: number | null): Promise<void> {
+  void idUser;
 }
 
 export async function afficherNotificationSysteme(
@@ -48,15 +76,24 @@ export async function afficherNotificationSysteme(
 ): Promise<boolean> {
   const permission = await Notifications.getPermissionsAsync();
   if (permission.status !== 'granted') return false;
+  const identifiant = `codebara-${notification.id}`;
+  // Même identifiant = même notification : on évite un doublage si le polling
+  // et la tâche en arrière-plan se croisent avant le marquage `fetched`.
+  try {
+    await Notifications.cancelScheduledNotificationAsync(identifiant);
+  } catch {
+    // Aucune notification planifiée sous cet identifiant : cas normal.
+  }
   await Notifications.scheduleNotificationAsync({
-    identifier: `codebara-${notification.id}`,
+    identifier: identifiant,
     // Logo (icône Android via le config plugin), nature sous forme de sous-titre,
     // objet visible — jamais le corps ( carte/checksum ) de la notification.
     content: {
       title: 'CodEbara',
       subtitle: notification.type || 'information',
       body: notification.object,
-      sound: false,
+      sound: true,
+      vibrate: Platform.OS === 'android' ? VIBRATION : undefined,
       data: { notificationId: notification.id },
     },
     trigger: Platform.OS === 'android' ? { channelId: CANAL } : null,

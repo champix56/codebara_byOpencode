@@ -1,14 +1,22 @@
 // GÉNÉRÉ par scripts/maj-notes-version.mjs — NE PAS ÉDITER À LA MAIN.
 // Source maintenue : NOTES-VERSION.md (racine) — npm run maj:notes après édition.
 // VERSION_APPLI = première section du md (la plus récente) ; affichée en jeu
-// sous le bandeau publicitaire (« CodEbara v0.0.17 ») et
+// sous le bandeau publicitaire (« CodEbara v0.0.18 ») et
 // consommée par la fenêtre notes de version.
 
-export const VERSION_APPLI = '0.0.17';
+export const VERSION_APPLI = '0.0.18';
 
 export type NoteVersion = { version: string; lignes: string[] };
 
 export const NOTES_VERSION: NoteVersion[] = [
+  {
+    "version": "v0.0.18",
+    "lignes": [
+      "Les notifications continuent d'arriver quand l'appli est fermée : le téléphone interroge le serveur pour le dernier joueur connecté, sans utiliser ni consommer tes tokens de session.",
+      "Chaque notification joue un son et fait vibrer, que l'appli soit ouverte ou non.",
+      "Sur navigateur, le service worker tente le même suivi lorsque l'onglet est fermé, selon les possibilités du navigateur."
+    ]
+  },
   {
     "version": "v0.0.17",
     "lignes": [

@@ -12,6 +12,7 @@ description: Project documentation for codEbara — architecture, structure, and
    - `web-url-figee.md` — web URL locked to root (figerUrl.ts), web notes
    - `etat-global.md` — Redux Toolkit: persisted store, user slice (tokens), DevTools, logout
    - `services-serveur.md` — api.ts (HTTP client), collection.ts (.cdz cache), verification.ts
+   - `notifications.md` — system notifications: active polling, background task, web service worker, sound/vibration, limits
    - `cdz-pipeline.md` — .cdz archive reading/validation (ZIP, sha256, hashs.json, seasons)
    - `visuel-carte-3d.md` — 3D card showcase (rotation, tilt, zoom)
    - `serveur-https.md` — public HTTPS certificate, no native setup, IPv4-only DNS requirement

@@ -1,55 +1,15 @@
 This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
 
-## Expo has changed — do not trust your training data
+## Standing rules
 
-Expo ships breaking changes every SDK release. APIs you remember are likely renamed, moved, or removed. Before writing any code that touches an Expo, EAS, or React Native API:
+The details live in `docs/` (see `docs/README.md`); open only the file you need.
 
-1. Read the major version of the `expo` package in `package.json`.
-2. Fetch the matching versioned docs: `https://docs.expo.dev/versions/v<major>.0.0/`
-3. For anything else, fetch https://docs.expo.dev/llms.txt — an index of all Expo docs with corrections to common LLM misconceptions. Follow its links to the specific page you need; never answer from memory.
-
-## Commands
-
-Use `bunx` instead of `npx` if the project uses bun (`bun.lock` present).
-
-```bash
-npx expo install <package>  # ALWAYS use instead of npm/yarn/pnpm/bun add — resolves SDK-compatible versions
-npx expo start              # start the dev server
-npx expo lint               # lint
-npx tsc --noEmit            # typecheck
-npx expo-doctor             # diagnose dependency and config issues
-npx expo install --fix      # fix incompatible package versions
-```
-
-Run lint and typecheck before declaring any task done.
-
-## Navigation & Routing
-
-- **No router, no URLs.** The app (web included) is a plain SPA: `package.json` → `"main": "index.ts"` calls `registerRootComponent(App)` with the root component in `App.tsx`. Expo Router was removed on 2026-11-11 — do not reintroduce it, no route files, no history writes.
-- All navigation is state-based via `src/navigation/navigateur.ts` (`naviguer`, `remplacer`, `retourner`, type `Fenetre`) — root screens live in `src/ecrans/` (chargement, connexion, principal), other windows are rendered by `App.tsx` with the shared header `src/components/entete-ecran.tsx`. Keep non-screen code (components, hooks, utils) outside `src/ecrans/`.
-- On web the browser URL must always stay at the root (`src/utils/figerUrl.ts`, applied in `index.ts`); no path may ever select a specific screen — the app always starts from the chargement splash.
-
-## ASCII-only identifiers (standing rule)
-
-Code identifiers must be **ASCII, no accents**: `Fenetre.nom`, component names, file names and season `fenetre` values in `.cds` / `season.json`. The canonical id for the school window is `ecole` (never `école`); accents belong only to **displayed text** (menu label « École », header title) and to French documentation. A season graphic targets a window through `batiments.<key>.fenetre`: the value is an ASCII id with no parameter, resolved by the `ZONES` table in `src/ecrans/principal.tsx` (unknown values are ignored, never crash navigation).
-
-## Building with EAS
-
-Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
-Docs: https://docs.expo.dev/eas/index.md
-
-## Rules
-
-- If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
-- Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
-- Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
-
-## Screen documentation rule (constant)
-
-Every screen ("fenêtre") the user asks about MUST be described in its own dedicated Markdown file — never in the conversation — to limit token usage:
-
-- Location: `docs/screens/<screen-id>.md`, one file per screen, `<screen-id>` in kebab-case matching the window name.
-- If the file already exists, read it and update it in place instead of rewriting from scratch.
-- File structure: Rôle, Structure visuelle, États, Navigation, + notes when needed (keep it concise, write in French).
-- Add the new file to the index table in `docs/screens/README.md`.
-- In the conversation, reply with the file path and a one-line summary only. Never paste the full description.
+- **Expo APIs change**: before touching Expo/EAS/React Native code, read the `expo` major in `package.json` then the matching docs at `https://docs.expo.dev/versions/v<major>.0.0/` (or `https://docs.expo.dev/llms.txt`). → `docs/conventions.md`
+- **No router, no URLs**: state navigation via `src/navigation/navigateur.ts`; the web URL stays at the root. → `docs/navigation.md`, `docs/web-url-figee.md`
+- **ASCII-only identifiers**: no accents in code ids, filenames or season `fenetre` values; accents only in displayed text and French docs. → `docs/conventions.md`
+- **One Markdown file per screen** asked about: `docs/screens/<screen-id>.md`, never in the conversation. → `docs/screens/README.md`
+- **Bump the version for every non-Markdown change**: add the note to `NOTES-VERSION.md`, regenerate with `npm run maj:notes`, and reuse the new version wherever relevant. Markdown-only changes are exempt. → `docs/versioning.md`
+- **No build at the end of a task**: the user builds when they choose. Lint/typecheck only. → `docs/development.md`
+- Run `npx expo lint` and `npx tsc --noEmit` before declaring a task done.
+- `ios/` and `android/` are CNG-generated: never edit them by hand. Always `npx expo install` (or `bunx` when `bun.lock` exists). No secrets in versioned files.
+- Prefer recommended Expo modules; check available skills before adding a dependency.

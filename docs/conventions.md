@@ -21,11 +21,17 @@ Les API Expo changent à chaque release SDK — ne pas se fier à ses souvenirs.
 - État global : Redux Toolkit dans `src/store/` (tranches + persistance redux-persist) — toujours les hooks typés `useAppDispatch` / `useAppSelector` de `src/store/hooks.ts`.
 - Variante de plateforme : un composant commun peut avoir un frère `.web.tsx` choisi par Metro au même import (ex. `usine-ecran.tsx` = caméra natif, `usine-ecran.web.tsx` = saisie manuelle web) — jamais de `Platform.OS` pour tout un écran.
 
+## Identifiants ASCII
+
+Aucun accent dans les identifiants de code (`Fenetre.nom`, composants, noms de fichiers, valeurs `fenetre` des `.cds` / `season.json`). L'identifiant canonique de l'école est `ecole` (jamais `école`) ; les accents restent réservés aux textes affichés (« École ») et à la documentation française. Une valeur `fenetre` inconnue est ignorée sans faire crasher la navigation (table `ZONES` de `src/ecrans/principal.tsx`).
+
 ## Règles dures
 
 - Ne jamais créer ni éditer `ios/` / `android/` à la main (CNG). Configuration native uniquement via `app.json` et config plugins.
-- Toujours `npx expo install` pour ajouter une dépendance.
+- Toujours `npx expo install` pour ajouter une dépendance (`bunx` si `bun.lock` présent).
 - Lint + typecheck obligatoires avant de clôturer une tâche.
+- **Incrémenter la version à chaque modification non-Markdown** (détails : [`versioning.md`](./versioning.md)).
+- **Ne jamais lancer de build en fin de demande** : l'utilisateur build quand il le souhaite (détails : [`development.md`](./development.md)).
 - Pas de secret (clé d'API, token) en dur dans le code ou dans la configuration versionnée.
 
 ## Variables d'environnement
@@ -37,10 +43,4 @@ Les API Expo changent à chaque release SDK — ne pas se fier à ses souvenirs.
 
 ## Documentation des écrans (règle constante)
 
-Chaque écran (« fenêtre ») demandé par l'utilisateur est décrit dans **un fichier Markdown dédié**, jamais dans la conversation, afin de limiter l'usage de tokens :
-
-- Emplacement : `docs/screens/<id>.md` — un fichier par écran, `<id>` en kebab-case correspondant au nom de la fenêtre.
-- Si le fichier existe déjà, le lire et le mettre à jour en place.
-- Squelette attendu : Rôle, Structure visuelle, États, Navigation (+ notes utiles), en français et concis.
-- Ajouter le fichier à l'index de [`screens/README.md`](./screens/README.md).
-- Dans la conversation, ne répondre qu'avec le chemin du fichier et un résumé d'une ligne — jamais la description complète.
+Un fichier par fenêtre demandée, jamais la description dans la conversation : voir [`screens/README.md`](./screens/README.md) pour l'emplacement, le squelette et l'index.

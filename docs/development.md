@@ -65,6 +65,10 @@ npx expo-doctor          # dépendances et configuration
 npx expo install --fix   # aligner les versions de packages sur le SDK
 ```
 
+## Pas de build en fin de demande
+
+L'agent ne lance **aucun build** (`npm run build:web`, `npm run build:android:local`, `expo export`, `eas build`, …) à la clôture d'une tâche : l'utilisateur s'en charge à chaque fois. Seuls lint et typecheck sont exécutés systématiquement. Les commandes de build ci-dessous sont documentées pour l'utilisateur, pas déclenchées automatiquement.
+
 ## Gestion des dépendances
 
 TOUJOURS utiliser `npx expo install <package>` plutôt que `npm`/`yarn`/`pnpm`/`bun add —` cela résout des versions compatibles avec le SDK d'Expo.

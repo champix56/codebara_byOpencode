@@ -17,6 +17,7 @@ Application mobile Expo / React Native. Cette documentation est le point d'entr�
 | [serveur-https.md](./serveur-https.md) | HTTPS du serveur : certificat public, aucune configuration native, contrainte DNS IPv4-only |
 | [development.md](./development.md) | Installation, commandes de dev, vérifications, gestion des dépendances, builds EAS |
 | [conventions.md](./conventions.md) | Principes de code, politique de vérification des docs Expo, règles dures |
+| [versioning.md](./versioning.md) | Incrément de version à chaque modification non-Markdown, notes de version, migration serveur |
 | [screens/](./screens/README.md) | Un fichier Markdown par écran (« fenêtre ») — descriptions délocalisées pour limiter l'usage de tokens |
 
 ## Comment la lire ?

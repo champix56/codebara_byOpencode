@@ -10,7 +10,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { remplacer } from '../navigation/navigateur';
+import { VERSION_APPLI } from '../data/notes-version';
+import { naviguer, remplacer } from '../navigation/navigateur';
 import { authentifierParLogin, creerCompte, renouvelerMotDePasse, ErreurApi, obtenirUrlBase, definirUrlBase } from '../services/api';
 import { useAppDispatch } from '../store/hooks';
 import { UTILISATEUR_DEBUG, seConnecter } from '../store/utilisateur';
@@ -264,6 +265,14 @@ const MODE_DEBUG =
                   : 'Je l’ai retrouvé — me connecter'}
             </Text>
           </Pressable>
+
+          <Pressable
+            hitSlop={6}
+            onPress={() => naviguer({ nom: 'notes' })}
+            accessibilityLabel={`Version ${VERSION_APPLI} — notes de version`}
+          >
+            <Text style={styles.version}>CodEbara v{VERSION_APPLI}</Text>
+          </Pressable>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -374,5 +383,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 18,
     textDecorationLine: 'underline',
+  },
+  version: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#43a047',
+    textAlign: 'center',
+    marginTop: 18,
   },
 });

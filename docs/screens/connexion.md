@@ -18,6 +18,7 @@ Fenêtre **triple** : connexion, création de compte et **renouvellement du mot 
 - Liens soulignés verts :
   - « Mot de passe oublié ? » (masquer en mode oublié) → mode renouvellement ;
   - bascule : `Pas encore de compte ? Créer un compte` ↔ `Déjà un compte ? Se connecter` ↔ (mode oublié) `Je l'ai retrouvé — me connecter`.
+- En bas du contenu, le champ de version « CodEbara v0.0.x » (`VERSION_APPLI`, généré depuis `NOTES-VERSION.md`) — vert, pressable, ouvre la fenêtre notes de version (même rendu que dans la principale, v0.0.17).
 
 ## États
 
@@ -34,6 +35,7 @@ Fenêtre **triple** : connexion, création de compte et **renouvellement du mot 
 - Le lien bascule le mode en place (aucun changement de fenêtre) ; le mail saisi est conservé.
 - Connexion réussie : `remplacer({ nom: 'chargement', mode: 'post-connexion' })` — sortie de pile (le splash relancé mène ensuite au principal).
 - Bouton debug : `remplacer({ nom: 'chargement', mode: 'debug' })` — sortie de pile vers le splash allégé, qui garde l'étape saison (surtout sur web).
+- Champ version : `naviguer({ nom: 'notes' })` — ouvrable depuis la connexion, comme depuis la principale ; retour à la connexion par le retour standard de l'en-tête partagé.
 - Aucune barre d'en-tête sur cette fenêtre (plein écran).
 
 ## Notes

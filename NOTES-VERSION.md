@@ -6,6 +6,10 @@ courante embarquée dans l'app (`src/data/notes-version.ts`, généré par
 `npm run maj:notes`). Les nouveautés sont suivies à partir de v0.0.8 ; les
 évolutions antérieures ne sont pas listées.
 
+## v0.0.17
+
+- La version de l'app s'affiche aussi sur la fenêtre de connexion ; un appui dessus ouvre les notes de version, comme depuis la principale.
+
 ## v0.0.16
 
 - notifications système sur mobile et sur le web : tu es prévenu dès qu’un message arrive, avec le logo et sa nature, sans le corps du message.

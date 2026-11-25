@@ -5,7 +5,8 @@
 Fenêtre « nouveautés » du jeu : la liste incrémentielle des versions est
 embarquée dans l'app (aucune requête). Ouverte depuis le champ de version
 « CodEbara v0.0.x » pressable sous le bandeau publicitaire de la fenêtre
-principale (exigence produit 2026-11-16).
+principale (exigence produit 2026-11-16) et, depuis v0.0.17, depuis la fenêtre
+de connexion.
 
 ## Structure visuelle
 
@@ -26,9 +27,10 @@ principale (exigence produit 2026-11-16).
 
 ## Navigation
 
-- Entrée : `naviguer({ nom: 'notes' })` depuis le bandeau pub (`principal`).
-- Sortie : bouton retour ‹ (dépile vers `principal` ; sur web, consomme une
-  entrée d'historique — cf. `navigation.md`).
+- Entrée : `naviguer({ nom: 'notes' })` depuis le bandeau pub (`principal`) ou
+  depuis le champ version en bas de `connexion`.
+- Sortie : bouton retour ‹ (dépile vers la fenêtre d'origine ; sur web, consomme
+  une entrée d'historique — cf. `navigation.md`).
 
 ## Notes
 

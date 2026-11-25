@@ -15,7 +15,8 @@ description: Project documentation for codEbara — architecture, structure, and
    - `cdz-pipeline.md` — .cdz archive reading/validation (ZIP, sha256, hashs.json, seasons)
    - `visuel-carte-3d.md` — 3D card showcase (rotation, tilt, zoom)
    - `serveur-https.md` — public HTTPS certificate, no native setup, IPv4-only DNS requirement
-   - `development.md` — installation, dev commands, checks, EAS builds
+   - `development.md` — installation, dev commands, checks, EAS builds (the agent never builds at task end)
    - `conventions.md` — coding rules, Expo documentation policy, hard rules
+   - `versioning.md` — version bump on every non-Markdown change, release notes, server migration
    - `screens/<id>.md` — screen-by-screen ("fenêtre") descriptions; index in `screens/README.md`
 3. Answer based on these files. If the docs are out of date with the code, point out the discrepancy and suggest updating them.

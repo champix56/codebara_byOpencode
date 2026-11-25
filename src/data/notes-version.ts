@@ -1,14 +1,20 @@
 // GÉNÉRÉ par scripts/maj-notes-version.mjs — NE PAS ÉDITER À LA MAIN.
 // Source maintenue : NOTES-VERSION.md (racine) — npm run maj:notes après édition.
 // VERSION_APPLI = première section du md (la plus récente) ; affichée en jeu
-// sous le bandeau publicitaire (« CodEbara v0.0.16 ») et
+// sous le bandeau publicitaire (« CodEbara v0.0.17 ») et
 // consommée par la fenêtre notes de version.
 
-export const VERSION_APPLI = '0.0.16';
+export const VERSION_APPLI = '0.0.17';
 
 export type NoteVersion = { version: string; lignes: string[] };
 
 export const NOTES_VERSION: NoteVersion[] = [
+  {
+    "version": "v0.0.17",
+    "lignes": [
+      "La version de l'app s'affiche aussi sur la fenêtre de connexion ; un appui dessus ouvre les notes de version, comme depuis la principale."
+    ]
+  },
   {
     "version": "v0.0.16",
     "lignes": [

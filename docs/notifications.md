@@ -1,4 +1,4 @@
-# Notifications système (v0.0.18)
+# Notifications système (v0.0.19)
 
 Deux relais se relaient pour afficher les messages de la Poste sans ouvrir l'application : le polling dans l'onglet/l'app active, puis une tâche native (mobile) ou un `periodicsync` du service worker (web) quand elle est fermée. Les deux chemins utilisent la même règle : **aucun token n'est envoyé depuis l'arrière-plan**, seulement `{"iduser": N}` dans le header `datas`. Le serveur ne renvoie donc aucun token roté et la chaîne de rotation en cours n'est pas consommée.
 
@@ -21,7 +21,7 @@ Deux relais se relaient pour afficher les messages de la Poste sans ouvrir l'app
 - `index.ts` importe `src/tasks/notifications-background.ts` pour son effet de bord : `TaskManager.defineTask` doit être appelé au chargement du bundle, y compris quand le système réveille l'app sans interface.
 - `useNotificationsSysteme()` appelle `enregistrerTacheNotifications()` une fois : `BackgroundTask.registerTaskAsync` avec un intervalle plancher de **15 minutes**. L'enregistrement est idempotent.
 - Exécution : lecture du dernier `iduser` → `preparerNotificationsArrierePlan()` (handler + canal, sans prompte) → `GET /notifications` sans token → pour chaque notification `fetched = false`, `scheduleNotificationAsync` puis `PUT /notifications/{id}/fetched` sans token.
-- Affichage : titre « CodEbara », nature en sous-titre (`type`), objet en corps — jamais le contenu de la carte. Canaux Android : `codebara-notifications`, importance `HIGH`, son `default`, vibration `[0, 250, 250, 250]`. iOS utilise le son système ; la vibration n'a pas de motif personnalisé sur iOS.
+- Affichage : titre « CodEbara », nature en sous-titre (`type`), objet en corps (numéro de carte inclus depuis v0.0.19, succès comme échec) — jamais le motif d'échec ni le contenu de la carte ; `reason` n'est affiché que dans la Poste. Canaux Android : `codebara-notifications`, importance `HIGH`, son `default`, vibration `[0, 250, 250, 250]`. iOS utilise le son système ; la vibration n'a pas de motif personnalisé sur iOS.
 - Le handler `setNotificationHandler` garde `shouldPlaySound: true` : le mettre à `false` supprimerait aussi le bandeau Android et le son du canal.
 - Clic : session active → `poste` ; sinon reprise par tokens persistés puis `poste`, ou `connexion` si la session est morte. Aucune URL n'est modifiée (SPA à racine fixe).
 

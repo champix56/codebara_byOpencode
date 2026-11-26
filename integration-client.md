@@ -731,12 +731,16 @@ demande dans la table miroir `card_awaiting_receipt` (état `attente de traiteme
 `content/card_tasks.json` et confiée à un pool de threads dimensionné par
 `CARD_POOL_SIZE` (`.env`, défaut 4). À la fin, la tâche est retirée du JSON et
 la ligne passe à `achevé` ou `echec` — elle reste en base jusqu'à la réception.
-Une notification est créée dans les deux cas.
+Une notification est créée dans les deux cas. Depuis v0.0.19, l'objet contient
+le numéro de carte même en cas d'échec et `cardid` est toujours renseigné ; le
+motif d'échec est renvoyé dans `reason` sur le détail (colonne SQL dédiée
+`notification.reason`, migration `migration-notification-reason.sql` côté
+serveur, non appliquée à la base vivante sans accord).
 
 | Méthode & route | Authentification | Réponse |
 |---|---|---|
-| `GET /notifications` | tokens du header `datas` **ou**, sans token, `{"iduser": N}` dans le header `datas` (ou `?iduser=N`) | `{"notifications":[{"id","object","date","type","state","cardid"}], "API_REQUEST_TOKEN"?}` — token **jamais** renvoyé ni consommé en mode sans token ; trié du plus récent au plus ancien. **Jamais de corps sur GET** (refusé par `fetch`) |
-| `GET /notifications/{id}` | tokens obligatoires (header `datas` ou corps) | `{"notification":{…, "card": "<base64>", "checksum", "reception":{id,state,cb}}}`. Le carte n'est jointe que si `type == "nouvelles cartes"` et l'état `achevé` |
+| `GET /notifications` | tokens du header `datas` **ou**, sans token, `{"iduser": N}` dans le header `datas` (ou `?iduser=N`) | `{"notifications":[{"id","object","date","type","state","fetched","cardid","reason"}], "API_REQUEST_TOKEN"?}` — token **jamais** renvoyé ni consommé en mode sans token ; trié du plus récent au plus ancien. **Jamais de corps sur GET** (refusé par `fetch`) |
+| `GET /notifications/{id}` | tokens obligatoires (header `datas` ou corps) | `{"notification":{…, "card": "<base64>", "checksum", "reception":{id,state,cb}, "reason": "<motif d'échec>"}}`. La carte n'est jointe que si `type == "nouvelles cartes"` et l'état `achevé` ; `reason` est nulle sauf échec |
 | `PUT /notifications/{id}` | tokens obligatoires | `{"read": true, "state": 1, "API_REQUEST_TOKEN"}` — marque comme lue, **ne supprime pas** la notification |
 | `GET /awaiting_cards/{id}` | tokens obligatoires, propriétaire vérifié | Même contenu que `GET /card/{id}` + `{"reception":{id,state,cb}}` ; `404 Card not found` si la carte n'est pas achevée ou le fichier absent |
 | `POST /awaiting_cards/{id}` | tokens obligatoires, propriétaire vérifié | Corps optionnel `{"name": "…"}`. Copie la ligne dans `card` avec le **même id**, supprime l'attente + la tâche JSON + la notification, renvoie `{"cardid","card","checksum","API_REQUEST_TOKEN"}` |
@@ -744,12 +748,14 @@ Une notification est créée dans les deux cas.
 
 Types de notifications : `nouvelles cartes` (génération achevée) et
 `information` (échec). Le client `poste` affiche **l'objet seul** dans la liste,
+précédé d'une icône (v0.0.19 : œuf si carte générée, croix rouge si échec),
 appelle `PUT /notifications/{id}` à l'ouverture puis `GET /notifications/{id}`.
+Le détail d'un échec affiche `reason` dans le corps du message.
 Une carte achevée impose le choix : `POST` (nom optionnel demandé par une modal)
 puis mise en cache `<idUser>/<id>.cdz`, ou `DELETE`. Une carte en échec est
 supprimée par `DELETE` dès l'ouverture de sa notification. Le retour est
 verrouillé tant qu'une carte achevée n'est pas traitée (en-tête, bouton Android
-et historique web). Migration SQL : `migration-card-awaiting.sql` (dépôt serveur).
+et historique web). Migrations SQL (dépôt serveur) : `migration-card-awaiting.sql`, `migration-notification-fetched.sql`, `migration-notification-reason.sql`.
 
 ---
 

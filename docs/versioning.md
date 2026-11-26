@@ -12,6 +12,7 @@ La version est un numéro `0.0.x` partagé entre le client et le serveur ; on in
 2. Régénérer la source TypeScript : `npm run maj:notes` (script `scripts/maj-notes-version.mjs`). **Ne pas éditer `src/data/notes-version.ts` à la main** : il est généré depuis le `.md`.
 3. `VERSION_APPLI` (première section du `.md`) est affiché dans la principale (sous le bandeau) et dans la connexion ; la fenêtre notes de version liste les sections.
 4. Mettre à jour les références de version dans les docs écrans concernées (`docs/screens/*.md` et leur index) si le changement est visible à l'écran.
+5. La release GitHub se crée ensuite avec `npm run release` : le tag porte la version courante et les artefacts sont nommés `codebara.<version>.apk` / `codebara.<version>.web.zip` (procédure dans [`development.md`](./development.md)).
 
 ## Serveur (`pyCodebara2`)
 

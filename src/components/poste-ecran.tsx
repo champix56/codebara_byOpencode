@@ -21,6 +21,7 @@ import {
 import { enregistrerCarte, majIndex } from '../services/collection';
 import { useAppSelector } from '../store/hooks';
 import { cdzDepuisBase64, ouvrirCdz, type Cdz } from '../utils/cdz';
+import IconeNotification from './icone-notification';
 import VisuelCarte from './visuel-carte';
 
 // Fenêtre « Poste » : messagerie du joueur. La liste n'affiche que l'objet de
@@ -189,7 +190,8 @@ export default function PosteEcran() {
             onPress={() => ouvrir(notification)}
             accessibilityLabel={`Ouvrir : ${notification.object}`}
           >
-            {/* Contrat : l'objet seul est affiché dans la liste. */}
+            <IconeNotification echec={notification.type === 'information'} />
+            {/* Contrat : l'objet seul est affiché dans la liste (v0.0.19). */}
             <Text style={styles.objet}>{notification.object}</Text>
           </Pressable>
         ))}
@@ -217,9 +219,12 @@ export default function PosteEcran() {
 
             {selection && !selection.card && (
               <>
+                <IconeNotification echec />
                 <Text style={styles.titre}>{selection.object}</Text>
                 <Text style={styles.texte}>
-                  Cette carte n’a pas pu être générée. Elle a été retirée de la file.
+                  {selection.reason
+                    ? `Motif de l’échec : ${selection.reason}`
+                    : 'Cette carte n’a pas pu être générée. Elle a été retirée de la file.'}
                 </Text>
               </>
             )}
@@ -290,15 +295,18 @@ const styles = StyleSheet.create({
   plein: { flex: 1, backgroundColor: '#f9fafb' },
   liste: { padding: 16, gap: 10 },
   vide: { color: '#6b7280', textAlign: 'center', marginTop: 32 },
+  messagePresse: { backgroundColor: '#f3f4f6' },
   message: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e5e7eb',
     padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  messagePresse: { backgroundColor: '#f3f4f6' },
-  objet: { fontSize: 15, color: '#1f2937' },
+  objet: { fontSize: 15, color: '#1f2937', flexShrink: 1 },
   erreur: { color: '#c62828', textAlign: 'center', fontSize: 13 },
   voile: {
     flex: 1,

@@ -6,6 +6,15 @@ courante embarquée dans l'app (`src/data/notes-version.ts`, généré par
 `npm run maj:notes`). Les nouveautés sont suivies à partir de v0.0.8 ; les
 évolutions antérieures ne sont pas listées.
 
+## v0.0.20
+
+- Nouveau script `npm run release` : il crée le tag et la release GitHub avec le dernier APK (`codebara.0.0.x.apk`) et l'export web zippé (`codebara.0.0.x.web.zip`).
+
+## v0.0.19
+
+- Chaque notification de création de carte indique maintenant le numéro de la carte, même quand la génération a échoué.
+- En cas d'échec, la Poste affiche le motif précis dans le corps du message, avec une icône : un œuf pour une carte générée, une croix rouge pour un échec.
+
 ## v0.0.18
 
 - Les notifications continuent d'arriver quand l'appli est fermée : le téléphone interroge le serveur pour le dernier joueur connecté, sans utiliser ni consommer tes tokens de session.

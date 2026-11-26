@@ -796,6 +796,8 @@ export type NotificationServeur = {
   /** Déjà présentée en notification système (ne modifie PAS `state`). */
   fetched: boolean;
   cardid: number | null;
+  /** Motif d'un échec de génération (détail de la notification, v0.0.19). */
+  reason?: string | null;
   /** Présent sur le détail d'une carte achevée (même contenu que GET /card/{id}). */
   card?: string;
   checksum?: string;
@@ -815,6 +817,7 @@ function lireNotification(source: unknown): NotificationServeur | null {
     state: nombreValeur(brute, 'state') ?? 0,
     fetched: brute.fetched === true || brute.fetched === 1,
     cardid: nombreValeur(brute, 'cardid'),
+    reason: texteValeur(brute, 'reason') || null,
     card: texteValeur(brute, 'card') || undefined,
     checksum: texteValeur(brute, 'checksum') || undefined,
     reception:

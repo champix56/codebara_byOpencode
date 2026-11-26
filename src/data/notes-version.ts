@@ -1,14 +1,27 @@
 // GÉNÉRÉ par scripts/maj-notes-version.mjs — NE PAS ÉDITER À LA MAIN.
 // Source maintenue : NOTES-VERSION.md (racine) — npm run maj:notes après édition.
 // VERSION_APPLI = première section du md (la plus récente) ; affichée en jeu
-// sous le bandeau publicitaire (« CodEbara v0.0.18 ») et
+// sous le bandeau publicitaire (« CodEbara v0.0.20 ») et
 // consommée par la fenêtre notes de version.
 
-export const VERSION_APPLI = '0.0.18';
+export const VERSION_APPLI = '0.0.20';
 
 export type NoteVersion = { version: string; lignes: string[] };
 
 export const NOTES_VERSION: NoteVersion[] = [
+  {
+    "version": "v0.0.20",
+    "lignes": [
+      "Nouveau script `npm run release` : il crée le tag et la release GitHub avec le dernier APK (`codebara.0.0.x.apk`) et l'export web zippé (`codebara.0.0.x.web.zip`)."
+    ]
+  },
+  {
+    "version": "v0.0.19",
+    "lignes": [
+      "Chaque notification de création de carte indique maintenant le numéro de la carte, même quand la génération a échoué.",
+      "En cas d'échec, la Poste affiche le motif précis dans le corps du message, avec une icône : un œuf pour une carte générée, une croix rouge pour un échec."
+    ]
+  },
   {
     "version": "v0.0.18",
     "lignes": [

@@ -8,11 +8,11 @@ Messagerie du joueur (§5.15 du contrat serveur). Depuis le 2026-11-24, `POST /c
 
 ## Structure visuelle
 
-- Liste scrollable : **l'objet seul** de chaque notification est affiché (`notification.object`), sur une carte cliquable. Aucune date, type ou état dans la liste (contrat serveur).
+- Liste scrollable : **l'objet seul** de chaque notification est affiché (`notification.object`), sur une carte cliquable, précédé d'une icône (v0.0.19) : **œuf** pour une carte générée (`type = nouvelles cartes`), **croix rouge** pour un échec (`type = information`). Aucune date ni état dans la liste (contrat serveur).
 - Vide : « Aucune notification pour le moment. » ; chargement : spinner vert.
 - Ouverture d'une notification (`PUT /notifications/{id}` = marquer lue, puis `GET /notifications/{id}` = détail) → modal :
   - **carte achevée** (`type = nouvelles cartes`, état `achevé`) : visuel 3D (`visuel-carte.tsx`, largeur 180), titre « Carte #id », stats `datas.json` (santé / attaque / puissance), boutons **Accepter** et **Refuser**. « Accepter » ouvre un champ « Nom de la carte (facultatif) » + **Confirmer** / **Retour**. Aucun bouton Fermer.
-  - **carte en échec** (`type = information`) : message « Cette carte n'a pas pu être générée. Elle a été retirée de la file. » + **Compris**.
+  - **carte en échec** (`type = information`) : croix rouge, titre avec le numéro de la carte (objet envoyé par le serveur, même en échec), corps = motif réel renvoyé dans `notification.reason` (« Motif de l’échec : … ») ou message générique si absent, puis **Compris**.
 
 ## États
 
@@ -61,4 +61,4 @@ Service global monté une seule fois dans `App.tsx` sous `PersistGate`
 
 - Pas de router, pas d'URL : la fenêtre est pilotée uniquement par `src/navigation/navigateur.ts` (`naviguer`, `remplacer`, `retourner`, `definirBlocageRetour`).
 - Le blocage est global au navigateur : `naviguer`/`remonter`/`retourner` sont inertes, `remplacer(..., true)` reste autorisé pour la déconnexion sur session expirée (`api.ts`).
-- Migrations SQL à appliquer sur le serveur (dépôt pyCodebara2) : `migration-card-awaiting.sql` — tables `card_awaiting_receipt` et `notification` ; `migration-notification-fetched.sql` — colonne `notification.fetched` (script `migration_bdd.0.0.16.py`).
+- Migrations SQL à appliquer sur le serveur (dépôt pyCodebara2) : `migration-card-awaiting.sql` — tables `card_awaiting_receipt` et `notification` ; `migration-notification-fetched.sql` — colonne `notification.fetched` (script `migration_bdd.0.0.16.py`) ; `migration-notification-reason.sql` — colonne `notification.reason` (script `migration_bdd.0.0.19.py`, **non appliquée à la base vivante sans accord**).

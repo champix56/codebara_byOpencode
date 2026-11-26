@@ -92,3 +92,37 @@ Build Android local : `npm run build:android:local` (profil `preview`, APK sign�
 Le script force `npm_config_userconfig=/dev/null` **pour toute la chaîne EAS**. Sans cela, le `allow-scripts=@opencode/cli` du `~/.npmrc` utilisateur est relu par le `npx` qu'EAS utilise pour lancer son plugin, puis réinjecté dans le `npm ci` interne : échec `EALLOWSCRIPTS` (« --allow-scripts is not allowed in project-scoped installs »). Neutraliser seulement `npm_config_allow_scripts` ne suffit pas, car `npx` recalcule cette variable depuis le fichier utilisateur. Le `~/.npmrc` n'est pas modifié.
 
 Ne pas lancer ce script depuis `dist/` ni depuis un dossier de cache supprimé entre deux builds (sinon `uv_cwd`).
+
+## Créer une release GitHub
+
+`npm run release` (`scripts/creer-release.mjs`) publie la version courante, sans
+lancer de build : c'est l'utilisateur qui build avant. La version vient de la
+**première section** de `NOTES-VERSION.md` et sert aussi de notes de release.
+
+Prérequis :
+
+- `gh` installé et authentifié (`gh auth status`, droits `repo`) ;
+- arbre Git propre (les changements doivent être commités) ;
+- un APK présent à la racine (le **plus récent** par date de modification, ou
+  `--apk <chemin>`) et un export web dans `dist/` (`npm run build:web`).
+
+Le script :
+
+1. choisit l'APK et zippe le contenu de `dist/` (sans dossier parent) ;
+2. crée un tag annoté portant la version (`0.0.20`, comme le tag historique
+   `0.0.15`), sauf si `--tag-prefix v` est demandé, puis le pousse sur `origin` ;
+3. appelle `gh release create` avec le titre `v<version>`, les notes de version
+   et les deux artefacts renommés `codebara.<version>.apk` et
+   `codebara.<version>.web.zip` ;
+4. nettoie le zip temporaire (le zip n'est pas versionné, pas plus que `dist/`
+   ou les `.apk`).
+
+```bash
+npm run release:dry                       # plan seul, aucun tag ni release
+npm run release                           # publication
+npm run release -- --apk build-xxx.apk    # choisir un APK précis
+npm run release -- --tag-prefix v         # tag v0.0.20 au lieu de 0.0.20
+```
+
+Si la publication échoue après le push du tag (réseau par exemple), relancer :
+le script réutilise le tag existant et reprend la création de la release.

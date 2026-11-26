@@ -47,6 +47,8 @@
     "build:web": "npx expo export -p web",
     "build:android:local": "npm run maj:notes && rm -rf \"$HOME/.cache/eas-build\" && EAS_LOCAL_BUILD_WORKINGDIR=\"$HOME/.cache/eas-build\" npm_config_userconfig=/dev/null npm_config_allow_scripts= eas build --platform android --profile preview --local",
     "maj:notes": "node scripts/maj-notes-version.mjs",
+    "release": "node scripts/creer-release.mjs",
+    "release:dry": "node scripts/creer-release.mjs --dry-run",
     "eas:fixapiurl": "eas env:set --name EXPO_PUBLIC_SERVER_URL --environment preview --visibility plaintext --value"
   },
   "private": true

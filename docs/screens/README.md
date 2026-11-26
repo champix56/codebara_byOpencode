@@ -18,7 +18,7 @@ Un fichier Markdown par écran (« fenêtre ») de l'application. Règle constan
 | [arene.md](./arene.md) | Arène — fenêtre vierge (retour discret) | 2026-11-11 |
 | [ecole.md](./ecole.md) | École — 2 onglets : Recherche (joueurs par début de nickname/mail, `friendStatus` → Ajouter / En attente / Ami, **aucun accès maison**) et Amis (demandes repliables Accepter/Refuser + amis validés → maison visitée) | 2026-11-19 |
 | [maison-visite.md](./maison-visite.md) | Maison visitée (ami validé) — cartes `GET /friend/{id}/cards` décodées **en mémoire**, grille + détail 3D, **lecture seule** (aucun stockage, renommage ni téléchargement) | 2026-11-19 |
-| [poste.md](./poste.md) | Poste — messagerie (`GET /notifications` + `PUT` à l'ouverture), réception des cartes achevées : **accepter** (nom optionnel → `POST /awaiting_cards/{id}`) ou **refuser**, retour verrouillé ; **notification système mobile/web 30 s, `fetched`, clic → Poste ou connexion** (v0.0.16) | 2026-11-24 |
+| [poste.md](./poste.md) | Poste — messagerie (`GET /notifications` + `PUT` à l'ouverture), réception des cartes achevées : **accepter** (nom optionnel → `POST /awaiting_cards/{id}`) ou **refuser**, retour verrouillé ; notification système mobile/web 30 s, `fetched`, clic → Poste ou connexion (v0.0.16) ; **icônes œuf / croix rouge et motif d'échec dans le corps du détail** (v0.0.19) | 2026-11-26 |
 
 ## Format attendu
 

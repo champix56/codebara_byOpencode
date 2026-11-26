@@ -44,3 +44,5 @@ Deux relais se relaient pour afficher les messages de la Poste sans ouvrir l'app
 ## Configuration native
 
 `app.json` déclare le plugin `expo-background-task` et le plugin `expo-notifications` (icône monochrome, couleur `#43a047`, `enableRemoteNotifications: false`). `ios/` et `android/` restent générés par CNG : jamais d'édition manuelle. Le prochain build de l'utilisateur appliquera ces plugins.
+
+Le plugin `expo-build-properties` ajoute aussi deux règles ProGuard via `extraProguardRules` : elles conservent les constructeurs de `RoomDatabase` et `InputMerger` que R8 supprimait dans les builds release (SDK 58, `expo-background-task@58.0.13`). Sans elles, WorkManager plante pendant l'initialisation AndroidX, avant même le chargement de React Native. Ne pas retirer ces règles tant que le module amont ne fournit pas ses propres règles.

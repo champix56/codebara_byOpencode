@@ -93,6 +93,10 @@ Le script force `npm_config_userconfig=/dev/null` **pour toute la chaîne EAS**.
 
 Ne pas lancer ce script depuis `dist/` ni depuis un dossier de cache supprimé entre deux builds (sinon `uv_cwd`).
 
+### Dépannage : crash Android release à l'initialisation de WorkManager
+
+Si un APK signé se ferme avant l'affichage avec `Unable to get provider androidx.startup.InitializationProvider` puis `NoSuchMethodException: androidx.work.impl.WorkDatabase_Impl.<init> []`, c'est R8 (minification activée par défaut en SDK 58) qui a supprimé des constructeurs créés par réflexion. Les règles sont déclarées dans `app.json` via `extraProguardRules` du plugin `expo-build-properties` ; EAS/CNG les applique au prebuild. Ne pas éditer `android/app/proguard-rules.pro` à la main (dossier généré).
+
 ## Créer une release GitHub
 
 `npm run release` (`scripts/creer-release.mjs`) publie la version courante, sans

@@ -1,14 +1,20 @@
 // GÉNÉRÉ par scripts/maj-notes-version.mjs — NE PAS ÉDITER À LA MAIN.
 // Source maintenue : NOTES-VERSION.md (racine) — npm run maj:notes après édition.
 // VERSION_APPLI = première section du md (la plus récente) ; affichée en jeu
-// sous le bandeau publicitaire (« CodEbara v0.0.20 ») et
+// sous le bandeau publicitaire (« CodEbara v0.0.21 ») et
 // consommée par la fenêtre notes de version.
 
-export const VERSION_APPLI = '0.0.20';
+export const VERSION_APPLI = '0.0.21';
 
 export type NoteVersion = { version: string; lignes: string[] };
 
 export const NOTES_VERSION: NoteVersion[] = [
+  {
+    "version": "v0.0.21",
+    "lignes": [
+      "Correction d'un crash au démarrage sur les builds Android installés via APK : la minification du code ne supprime plus les classes nécessaires aux notifications en arrière-plan."
+    ]
+  },
   {
     "version": "v0.0.20",
     "lignes": [

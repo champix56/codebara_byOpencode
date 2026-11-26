@@ -6,6 +6,10 @@ courante embarquée dans l'app (`src/data/notes-version.ts`, généré par
 `npm run maj:notes`). Les nouveautés sont suivies à partir de v0.0.8 ; les
 évolutions antérieures ne sont pas listées.
 
+## v0.0.21
+
+- Correction d'un crash au démarrage sur les builds Android installés via APK : la minification du code ne supprime plus les classes nécessaires aux notifications en arrière-plan.
+
 ## v0.0.20
 
 - Nouveau script `npm run release` : il crée le tag et la release GitHub avec le dernier APK (`codebara.0.0.x.apk`) et l'export web zippé (`codebara.0.0.x.web.zip`).

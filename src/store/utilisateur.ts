@@ -14,6 +14,10 @@ export type Utilisateur = {
   nickname: string;
   mail: string;
   amount: number | null;
+  // Avatar du compte : PNG circulaire 150×150 en data URI, ou null pour les
+  // initiales. Reçu avec le profil au démarrage (GET /user/auth), envoyé par
+  // PUT /user quand l'utilisateur en choisit un nouveau.
+  avatar: string | null;
   hash: string | null;
   apiToken: string | null;
   requestToken: string | null;
@@ -24,6 +28,7 @@ const ETAT_INITIAL: Utilisateur = {
   nickname: '',
   mail: '',
   amount: null,
+  avatar: null,
   hash: null,
   apiToken: null,
   requestToken: null,
@@ -37,13 +42,14 @@ export const UTILISATEUR_DEBUG: Utilisateur = {
   nickname: 'GOD',
   mail: 'codebara@free.fr',
   amount: null,
+  avatar: null,
   hash: null,
   apiToken: null,
   requestToken: null,
 };
 
 // Sous-ensemble modifiable depuis la fenêtre mairie (formulaire du compte).
-export type ProfilPartiel = Partial<Pick<Utilisateur, 'nickname' | 'hash'>>;
+export type ProfilPartiel = Partial<Pick<Utilisateur, 'nickname' | 'hash' | 'avatar'>>;
 
 const trancheUtilisateur = createSlice({
   name: 'utilisateur',
@@ -61,9 +67,9 @@ const trancheUtilisateur = createSlice({
       ...etat,
       requestToken: action.payload,
     }),
-    // Modification locale du profil (nickname et/ou hash) — fenêtre mairie :
-    // PUT /user n'existe pas encore côté serveur (contrat §9.3).
-    // Payload partiel : les champs absents conservent leur valeur.
+    // Mise à jour locale du profil (nickname, hash, avatar) — fenêtre mairie,
+    // après le PUT /user serveur : payload partiel, les champs absents
+    // conservent leur valeur.
     modifierProfil: (etat, action: PayloadAction<ProfilPartiel>) => ({
       ...etat,
       ...action.payload,

@@ -14,8 +14,9 @@ Deux onglets dans la même fenêtre :
 ## Structure visuelle
 
 - En-tête commun `EnteteEcran` : logo hauteur du texte + titre « École » + chevron
-  de retour (ajouté par `App.tsx`) ; à droite pièce/valeur `1000` en bulle vert
-  clair et avatar (initiales du nickname) → `mairie`.
+  de retour (ajouté par `App.tsx`) ; à droite pièce/valeur (`amount` réel du
+  compte, « — » si absent) en bulle vert clair et avatar (image du compte ou
+  initiales du nickname) → `mairie`.
 - Barre d'onglets en haut : « Recherche » (actif par défaut) / « Amis (n) » avec
   le nombre d'amis validés. L'onglet Amis charge demandes + amis à la première
   visite.
@@ -28,7 +29,7 @@ Deux onglets dans la même fenêtre :
   invalide ou recherche en cours ; `Entrée` déclenche aussi la recherche).
 - Aide sous le champ si moins de 4 car. ou caractère interdit (espace, `&`, `=`,
   `%`, `?`, `#`, `+` : la query string n'est pas décodée côté serveur).
-- Liste d'une ligne par joueur : pastille initiale, nickname, mail, puis **une
+- Liste d'une ligne par joueur : avatar circulaire (image du profil, sinon initiale sur fond gris), nickname, mail, puis **une
   seule** action selon `friendStatus` :
   - `unknown` → bouton bleu « Ajouter » (envoie `POST /friend/request/{id}`) ;
   - `pending` → pastille grise « En attente » (demande reçue **ou** envoyée) ;
@@ -40,11 +41,11 @@ Deux onglets dans la même fenêtre :
 ### Onglet Amis
 
 - Section **repliable** « Demandes reçues (n) » (chevron ▾/▸, ouverte par défaut)
-  : une ligne par demande avec nickname, mail, date, et **deux boutons** —
+  : une ligne par demande avec avatar, nickname, mail, date, et **deux boutons** —
   « Accepter » (`POST /friend/request/{id}`, la POST inverse bascule l'amitié en
   validée) et « Refuser » (`DELETE /friend/request/{id}` du demandeur). Vide :
   « Aucune demande en attente. »
-- En dessous, « Mes amis (n) » : une ligne par ami validé (pastille, nickname,
+- En dessous, « Mes amis (n) » : une ligne par ami validé (avatar, nickname,
   mail, nombre de cartes, chevron `›`), **toute la ligne est cliquable** →
   `naviguer({ nom: 'maison-visite', amiId, nickname })`. Vide : « Aucun ami
   validé pour le moment. »
@@ -88,8 +89,8 @@ Deux onglets dans la même fenêtre :
 - `src/services/api.ts` : `rechercherUtilisateurs` valide la saisie, appelle
   `appelProtege('/users?value=' + valeur)` puis tronque à 5 (`USER_SEARCH_LIMIT`
   serveur = 6). `listerDemandesAmis`, `listerAmis`, `envoyerDemandeAmi`,
-  `refuserDemandeAmi`, `listerCartesAmi` (liste) et `recupererCarteAmi`
-  (une carte) encapsulent les routes `/friend/*`
+  `refuserDemandeAmi`, `listerApercusAmi` (grille) et `recupererCarteAmi`
+  (détail) encapsulent les routes `/friend/*`
   (contrat §5.13/§5.14 de `integration-client.md`).
 - Les deux appels de l'onglet Amis sont lancés ensemble : `api.ts` les
   **sérialise** (file d'appels) car le couple de tokens est à usage unique.

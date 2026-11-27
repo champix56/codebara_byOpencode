@@ -14,10 +14,16 @@ import { Picker } from '@react-native-picker/picker';
 import { naviguer } from '../navigation/navigateur';
 import IncrustationNomCarte from './incrustation-nom-carte';
 import { ErreurSession, listerCartes, type CarteListee } from '../services/api';
-import { lireCarteLocale, lireIndex, type EntreeIndex } from '../services/collection';
+import {
+  enregistrerApercuDepuisCdz,
+  lireApercu,
+  lireCarteLocale,
+  lireIndex,
+  type ApercuLocal,
+  type EntreeIndex,
+} from '../services/collection';
 import { useAppSelector } from '../store/hooks';
-import { extraireApercu, type DeckCarte, type DonneesCarte } from '../utils/cdz';
-import { encoderBase64 } from '../utils/base64';
+import type { DonneesCarte } from '../utils/cdz';
 
 // Fenêtre maison : aperçu des cartes en possession du joueur courant —
 // GET /card du serveur pyCodebara2 (contrat §5.4), porteur du second token :
@@ -26,16 +32,11 @@ import { encoderBase64 } from '../utils/base64';
 // (nom ou #id) et par série (saison datas.json des archives locales).
 // Chaque carte reste taponable → fenêtre détail en grand.
 
-// Aperçu chargé depuis le cache local (<idUser>/<id>.cdz §6.6) : image front
-// encodée en data URI + datas.json (nom frais, saison, valeurs). Les cartes
+// Aperçu chargé depuis le cache local : image front réduite à 20 % en data
+// URI + datas.json (nom frais, saison, valeurs) et deck.json. Les cartes
 // jamais ouvertes localement restent sans aperçu (cadre + #id) — le détail
 // les téléchargera à l'ouverture (§5.5).
-type Apercu = {
-  image: string;
-  datas: DonneesCarte;
-  /** deck.json (positions des incrustations) — null si absent de l'archive. */
-  deck: DeckCarte | null;
-};
+type Apercu = ApercuLocal;
 
 // Valeur de la liste déroulante « Série » : tout, une saison précise
 // (datas.seasonid) ou les cartes sans série connue (archive absente).
@@ -137,9 +138,10 @@ export default function MaisonEcran() {
     (async () => charger(false))();
   }, [charger]);
 
-  // Aperçus : lecture séquentielle des archives locales (une archive = unzip
-  // + extraction front/datas, sans les contrôles §6.3) — une à une pour ne
-  // pas bloquer le thread UI, annulée au démontage ou au changement de liste.
+  // Aperçus : lecture de l'aperçu 20 % mis en cache à la réception de la
+  // carte (aucun unzip). Repli sur les archives déjà en cache avant v0.0.22,
+  // avec génération de l'aperçu pour les fois suivantes — une carte à la
+  // fois pour ne pas bloquer le thread UI.
   useEffect(() => {
     let annule = false;
     (async () => {
@@ -149,20 +151,21 @@ export default function MaisonEcran() {
         tenteRef.current.add(carte.id); // tentée, succès ou échec : pas de boucle
         if (idUser === null) return;
         try {
-          const brute = await lireCarteLocale(idUser, carte.id);
-          if (!brute) continue; // jamais ouverte localement — reste sans aperçu
-          const apercu = await extraireApercu(brute);
+          const apercu = (await lireApercu(idUser, carte.id)) ?? null;
+          if (!apercu) {
+            const brute = await lireCarteLocale(idUser, carte.id);
+            if (!brute) continue; // jamais ouverte localement — reste sans aperçu
+            await enregistrerApercuDepuisCdz(idUser, carte.id, brute);
+            const migre = await lireApercu(idUser, carte.id);
+            if (!migre) continue;
+            if (annule) return;
+            definirApercus((actuels) => ({ ...actuels, [carte.id]: migre }));
+            continue;
+          }
           if (annule) return;
-          definirApercus((actuels) => ({
-            ...actuels,
-            [carte.id]: {
-              image: `data:image/png;base64,${encoderBase64(apercu.front)}`,
-              datas: apercu.datas,
-              deck: apercu.deck,
-            },
-          }));
+          definirApercus((actuels) => ({ ...actuels, [carte.id]: apercu }));
         } catch {
-          // Archive illisible : pas d'aperçu (le détail saura la re-télécharger §5.5).
+          // Aperçu/archive illisible : pas d'aperçu (le détail saura re-télécharger §5.5).
         }
       }
     })();

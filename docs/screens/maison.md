@@ -4,7 +4,7 @@ Fenêtre : `maison` — fichier `src/components/maison-ecran.tsx` (rendu par `Ap
 
 ## Rôle
 
-**Collection du joueur courant sous forme d'aperçus** — `GET /card` (contrat §5.4, tokens requis : la réponse ne porte QUE les cartes de la session). La grille affiche l'**image front** de chaque carte avec **les valeurs sous l'image** ; le nom n'est pas dans la liste serveur : il vient de l'index local du cache (`index.json` / IndexedDB web, alimenté aux ouvertures de détail). Chaque carte ouvre son **détail** en grand (fenêtre `carte`, id porté par la fenêtre).
+**Collection du joueur courant sous forme d'aperçus** — `GET /card` (contrat §5.4, tokens requis : la réponse ne porte QUE les cartes de la session). La grille affiche l'**image front réduite à 20 %** de chaque carte avec **les valeurs sous l'image** ; cet aperçu est généré à la réception de la carte et lu depuis `previews/<id>.json` (IndexedDB sur web), sans dézipper le `.cdz`. Le nom vient de l'index local du cache (`index.json`, alimenté aux ouvertures de détail) ; les archives plus anciennes sont migrées à la lecture. L'aperçu est supprimé avec la carte. Chaque carte ouvre son **détail** en grand (fenêtre `carte`, id porté par la fenêtre).
 
 ## Structure visuelle
 
@@ -13,14 +13,14 @@ Fenêtre : `maison` — fichier `src/components/maison-ecran.tsx` (rendu par `Ap
   - champ de **recherche** (« Chercher par nom ou #numéro ») — insensible aux accents (« zeph » trouve « Zéphyr »), un `#id` filtre par numéro ;
   - liste déroulante **Série** (`@react-native-picker/picker`) : « Toutes les séries » + une option par saison — **le NOM de la saison quand l'archive le porte** (`datas.json`, parsing opportuniste `season`/`seasonName`, exigence 2026-11-15), sinon « Série n » (identifiant `seasonid`) + « Série inconnue » (cartes sans archive ou sans saison) ;
   - **zoom** : boutons `+` / `−` encadrant « n/ligne » — de **4 cartes par ligne** (défaut web, commit « limit 5 col by def. on list on web ») à **2** (bornes 2..6 ; `+` agrandit les cartes, `−` les réduits). Défaut natif : 3.
-- **Grille** : cellules flexwrap, cadres ratio 600/1037 (`front.png` en `resizeMode: contain`) — les cartes sans cache local affichent un cadre gris avec « #id ». Sous le cadre : **nom** (ou « Carte #id ») puis stats « P puissance · S santé · A attaque » (`datas.*` de l'archive, sinon valeurs serveur, « — » si absents).
+- **Grille** : cellules flexwrap, cadres ratio 600/1037 (aperçu `front.png` réduit à 20 % en `resizeMode: contain`) — les cartes sans aperçu ni cache local affichent un cadre gris avec « #id ». Sous le cadre : **nom** (ou « Carte #id ») puis stats « P puissance · S santé · A attaque » (`datas.*` de l'archive, sinon valeurs serveur, « — » si absents).
 - États d'affichage : chargement (« Chargement de la collection… »), vide (« Aucune carte encore — passe à l'usine scanner un code-barres ! »), sans-session, erreur (rouge + bouton vert « Réessayer »), filtre sans résultat (« Aucune carte ne correspond à la recherche. »).
 
 ## États
 
 - `etat` : `chargement` / `pret` / `vide` / `sans-session` / `erreur` ; `cartes`, `nomsDetail` (Record id → index local { nom, saisonId?, saison? }), `rafraichit` ; outils : `recherche`, `serie` ('toutes' / 'inconnue' / clé de saison `id:n` ou `nom:<nom>`), `colonnes` (2..6) ; `apercus` (Record id → { image data URI, datas }).
 - Chargement à l'ouverture uniquement ; tirer-pour-actualiser relance ; appels protégés **sérialisés** (contrat §9.1). Rotation du request-token au succès (service).
-- **Aperçus** : lecture **séquentielle** des archives locales (`lireCarteLocale` + `extraireApercu`, sans contrôles d'intégrité §6.3), une à une pour ne pas bloquer l'UI, annulée au démontage ; chaque id n'est tenté qu'une fois (`tenteRef` — un rafraîchissement ne relit pas les archives déjà couvertes). Une archive illisible reste sans aperçu (le détail la re-téléchargera, §5.5).
+- **Aperçus** : lecture **séquentielle** du cache `previews/<id>.json` (20 % du `front.png`), une carte à la fois pour ne pas bloquer l'UI, annulée au démontage ; chaque id n'est tenté qu'une fois (`tenteRef`). Repli sur `lireCarteLocale` + `extraireApercu` pour les archives antérieures à v0.0.22, avec génération de l'aperçu pour la fois suivante. Un aperçu illisible reste sans image (le détail re-téléchargera l'archive, §5.5).
 - Mort de session (« Invalid REQUEST TOKEN ») : reset + purge + connexion centralisés — l'écran ignore l'erreur.
 - Sans session : état dédié (bypass debug ou jamais connecté).
 - Échec de l'index local : ignoré silencieusement (noms « #id »).

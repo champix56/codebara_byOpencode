@@ -3,14 +3,11 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fenetreCourante, naviguer } from "../navigation/navigateur";
 import { useAppSelector } from "../store/hooks";
+import Avatar from "./avatar";
 
 // Hauteur commune au titre et au logo : le logo reste exactement de la hauteur
 // du texte, comme demandé, sans agrandir la barre.
 const HAUTEUR_TITRE = 20;
-
-// Affichage décoratif pour l'instant : `utilisateur.amount` n'est pas encore
-// branché sur l'interface (cf. integration-client.md : monnaie non utilisée).
-const MONTANT_AFFICHE = 1000;
 
 type Props = {
   titre: string;
@@ -23,14 +20,13 @@ type Props = {
 
 // Barre d'en-tête maison des fenêtres — remplace les en-têtes natifs du Stack
 // (disparus avec le router). Titre centré précédé du logo, slot gauche
-// (retour ou burger), et slot droite : pièce + valeur dans une bulle verte
-// claire puis avatar (initiales du nickname) ouvrant directement la mairie.
+// (retour ou burger), et slot droite : pièce + montant réel du compte dans une
+// bulle verte claire puis avatar (image ou initiales) ouvrant la mairie.
 // Les deux slots ont la même largeur pour garder le titre réellement centré.
 // La marge haute respecte la zone sûre (encoche natif ; 0 sur le web).
 export default function EnteteEcran({ titre, onRetour, gauche }: Props) {
   const insets = useSafeAreaInsets();
-  const nickname = useAppSelector((etat) => etat.utilisateur.nickname);
-  const initiales = nickname.trim().slice(0, 2).toUpperCase() || "?";
+  const { nickname, amount, avatar } = useAppSelector((etat) => etat.utilisateur);
 
   const ouvrirMairie = () => {
     // Évite d'empiler une seconde mairie quand on est déjà dedans.
@@ -72,7 +68,7 @@ export default function EnteteEcran({ titre, onRetour, gauche }: Props) {
                 style={styles.piece}
                 resizeMode="contain"
               />
-              <Text style={styles.valeur}>{MONTANT_AFFICHE}</Text>
+              <Text style={styles.valeur}>{amount === null ? "—" : amount}</Text>
             </View>
           </View>
           <Pressable
@@ -80,9 +76,9 @@ export default function EnteteEcran({ titre, onRetour, gauche }: Props) {
             onPress={ouvrirMairie}
             accessibilityLabel="Ouvrir la mairie"
             accessibilityRole="button"
-            style={styles.avatar}
+            style={styles.avatarBouton}
           >
-            <Text style={styles.initiales}>{initiales}</Text>
+            <Avatar uri={avatar} nom={nickname} taille={26} initiales={2} />
           </Pressable>
         </View>
       </View>
@@ -162,17 +158,8 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#166534",
   },
-  avatar: {
+  avatarBouton: {
     width: 26,
     height: 26,
-    borderRadius: 13,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#dbeafe",
-  },
-  initiales: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#1e40af",
   },
 });

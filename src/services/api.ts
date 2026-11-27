@@ -172,8 +172,19 @@ type DonneesUtilisateurServeur = {
   nickname: string;
   mail: string;
   amount: number | null;
+  avatar: string | null;
   hash: string | null;
 };
+
+// L'avatar voyage en data URI PNG (serveur : fichier sous
+// contents/user/<id>/avatar.png, chemin en BDD). Un ancien serveur qui ne
+// renvoie pas le champ — ou renvoie un chemin interne — donne null : l'app
+// affiche alors les initiales, sans jamais tenter de charger un chemin
+// serveur comme une URI locale.
+function lireImageUri(source: Record<string, unknown>, cle: string): string | null {
+  const valeur = texteValeur(source, cle);
+  return valeur.startsWith('data:image/') ? valeur : null;
+}
 
 function lireUtilisateur(source: Record<string, unknown>): DonneesUtilisateurServeur {
   if (typeof source.id !== 'number') {
@@ -184,6 +195,7 @@ function lireUtilisateur(source: Record<string, unknown>): DonneesUtilisateurSer
     nickname: texteValeur(source, 'nickname'),
     mail: texteValeur(source, 'mail'),
     amount: nombreValeur(source, 'amount'),
+    avatar: lireImageUri(source, 'avatar'),
     hash: typeof source.hash === 'string' ? (source.hash as string) : null,
   };
 }
@@ -391,15 +403,19 @@ export async function renouvelerMotDePasse(mailExact: string): Promise<void> {
 // ─── Mise à jour du profil (§5.10 — PUT /user, tokens requis) ───────────────
 
 // Champs tous optionnels (au moins un requis, sinon le serveur renverrait un
-// 400). Le mot de passe est validé et haché ICI (contrat §5.10 : validation
+// 400) : nickname, mot de passe, avatar. Le mot de passe est validé et haché ICI (contrat §5.10 : validation
 // côté client obligatoire) : le serveur ne reçoit que le hash final
 // SHA256(mail_courant + clair) — le mail de session ne change pas par cet
 // appel de la mairie, donc mail_final = mail courant. Réponse 200 : profil à
 // jour + nouveau API_REQUEST_TOKEN (rotation appliquée par appelProtege).
 export async function modifierUtilisateurServeur(
-  modifications: { nickname?: string; motDePasseClair?: string },
+  modifications: { nickname?: string; motDePasseClair?: string; avatar?: string | null },
 ): Promise<DonneesUtilisateurServeur> {
-  if (modifications.nickname === undefined && modifications.motDePasseClair === undefined) {
+  if (
+    modifications.nickname === undefined &&
+    modifications.motDePasseClair === undefined &&
+    modifications.avatar === undefined
+  ) {
     throw new ErreurApi('Aucune modification à envoyer');
   }
   const corps: Record<string, unknown> = {};
@@ -409,6 +425,11 @@ export async function modifierUtilisateurServeur(
   if (modifications.motDePasseClair !== undefined) {
     const mailSession = store.getState().utilisateur.mail;
     corps.password = await hacherMotDePasse(mailSession, modifications.motDePasseClair);
+  }
+  // avatar null = suppression côté serveur (fichier + colonne), pas oubli du
+  // champ : la distinction est faite ici, avant JSON.stringify du corps.
+  if (modifications.avatar !== undefined) {
+    corps.avatar = modifications.avatar;
   }
   const reponse = await appelProtege('/user', { method: 'PUT', corps });
   return lireUtilisateur(reponse);
@@ -426,6 +447,7 @@ export type UtilisateurTrouve = {
   nickname: string;
   mail: string;
   friendStatus: StatutAmi;
+  avatar: string | null;
 };
 
 // Garde-fou client : le serveur renvoie déjà les 5 plus pertinents, on tronque
@@ -457,6 +479,7 @@ export async function rechercherUtilisateurs(value: string): Promise<Utilisateur
       nickname: texteValeur(utilisateur, 'nickname'),
       mail: texteValeur(utilisateur, 'mail'),
       friendStatus: lireStatutAmi(utilisateur.friendStatus),
+      avatar: lireImageUri(utilisateur, 'avatar'),
     }))
     .filter((utilisateur) => Number.isInteger(utilisateur.id) && utilisateur.id > 0)
     .slice(0, LIMITE_RECHERCHE_UTILISATEURS);
@@ -473,6 +496,7 @@ export type DemandeAmi = {
   nickname: string;
   mail: string;
   daterequest: string | null;
+  avatar: string | null;
 };
 
 export type Ami = {
@@ -480,6 +504,7 @@ export type Ami = {
   nickname: string;
   mail: string;
   cardcount: number;
+  avatar: string | null;
 };
 
 /** Métadonnée d'une carte de la liste `GET /friend/{id}/cards` (sans archive). */
@@ -505,6 +530,7 @@ function lireListeAmis(brut: unknown): Ami[] {
       nickname: texteValeur(v, 'nickname'),
       mail: texteValeur(v, 'mail'),
       cardcount: typeof v.cardcount === 'number' ? v.cardcount : 0,
+      avatar: lireImageUri(v, 'avatar'),
     }))
     .filter((ami) => Number.isInteger(ami.id) && ami.id > 0);
 }
@@ -519,6 +545,7 @@ export async function listerDemandesAmis(): Promise<DemandeAmi[]> {
       nickname: texteValeur(v, 'nickname'),
       mail: texteValeur(v, 'mail'),
       daterequest: typeof v.daterequest === 'string' ? v.daterequest : null,
+      avatar: lireImageUri(v, 'avatar'),
     }))
     .filter((demande) => Number.isInteger(demande.id) && demande.id > 0);
 }
@@ -556,6 +583,29 @@ export async function listerCartesAmi(idAmi: number): Promise<CarteAmi[]> {
       cardpower: nombreValeur(v, 'cardpower'),
       health: nombreValeur(v, 'health'),
       attack: nombreValeur(v, 'attack'),
+    }))
+    .filter((carte) => Number.isInteger(carte.id) && carte.id > 0);
+}
+
+/**
+ * Aperçus des cartes d'un ami — `GET /friend/{id}/previews` (lecture seule).
+ * Le serveur renvoie des PNG à 20 % (data URI), jamais l'archive `.cdz` : la
+ * grille d'une maison visitée ne télécharge plus chaque carte complète. Le
+ * détail garde `recupererCarteAmi` et son `.cdz`.
+ */
+export type ApercuAmi = CarteAmi & { preview: string | null };
+
+export async function listerApercusAmi(idAmi: number): Promise<ApercuAmi[]> {
+  const donnees = await appelProtege(`/friend/${idAmi}/previews`);
+  return (Array.isArray(donnees.cards) ? donnees.cards : [])
+    .filter((v): v is Record<string, unknown> => typeof v === 'object' && v !== null)
+    .map((v) => ({
+      id: Number(v.id),
+      cardHash: typeof v.cardHash === 'string' ? v.cardHash : null,
+      cardpower: nombreValeur(v, 'cardpower'),
+      health: nombreValeur(v, 'health'),
+      attack: nombreValeur(v, 'attack'),
+      preview: lireImageUri(v, 'preview'),
     }))
     .filter((carte) => Number.isInteger(carte.id) && carte.id > 0);
 }

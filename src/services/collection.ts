@@ -1,5 +1,12 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
+import { encoderBase64 } from '../utils/base64';
+import {
+  extraireApercu,
+  reduireApercu,
+  type DeckCarte,
+  type DonneesCarte,
+} from '../utils/cdz';
 
 // Cache collection d'un utilisateur (contrat §6.6) : les archives .cdz de
 // ses cartes, stockées LOCALEMENT :
@@ -15,6 +22,10 @@ import { Platform } from 'react-native';
 // saison (id + nom opportun, cf. cdz.ts) y est aussi portée : la maison
 // construit sa liste locale de saisons disponible pour l'utilisateur à partir
 // de cet index (mis à jour à chaque génération / renommage / détail chargé).
+//
+// Depuis v0.0.22, chaque carte reçoit aussi un aperçu `previews/<carteId>.json`
+// (front.png réduit à 20 % + datas/deck) : la maison lit cet aperçu au lieu
+// de décompresser l'archive complète, et le supprime avec la carte.
 
 export type EntreeIndex = {
   nom: string;
@@ -22,6 +33,15 @@ export type EntreeIndex = {
   saisonId?: number | null;
   /** Nom de saison lu dans datas.json (clé opportuniste), null si absent. */
   saison?: string | null;
+};
+
+// Aperçu léger stocké à côté de l'archive : front.png réduit à 20 % en data
+// URI + données métier (nom, saison, valeurs) et positions des incrustations.
+// La grille de la maison le lit sans jamais dézipper le .cdz complet.
+export type ApercuLocal = {
+  image: string;
+  datas: DonneesCarte;
+  deck: DeckCarte | null;
 };
 
 export async function lireIndex(idUser: number): Promise<Record<string, EntreeIndex>> {
@@ -69,11 +89,14 @@ export async function enregistrerCarte(
 ): Promise<void> {
   if (Platform.OS === 'web') {
     await enregistrerCarteWeb(idUser, carteId, octets);
-    return;
+  } else {
+    const dossier = new Directory(Paths.document, String(idUser));
+    dossier.create({ idempotent: true });
+    await new File(dossier, `${carteId}.cdz`).write(octets);
   }
-  const dossier = new Directory(Paths.document, String(idUser));
-  dossier.create({ idempotent: true });
-  await new File(dossier, `${carteId}.cdz`).write(octets);
+  // L'aperçu 20 % est généré au même moment que l'archive, sur web comme en
+  // natif : la maison n'a plus besoin de décompresser chaque .cdz pour sa grille.
+  await enregistrerApercuDepuisCdz(idUser, carteId, octets);
 }
 
 // Lit l'archive locale d'une carte — null si absente (le détail la
@@ -95,10 +118,89 @@ export async function lireCarteLocale(
 export async function supprimerCarte(idUser: number, carteId: number): Promise<void> {
   if (Platform.OS === 'web') {
     await supprimerCarteWeb(idUser, carteId);
+  } else {
+    const fichier = new File(Paths.document, String(idUser), `${carteId}.cdz`);
+    if (fichier.exists) await fichier.delete();
+  }
+  await supprimerApercu(idUser, carteId);
+}
+
+// ─── Aperçus 20 % (v0.0.22) ─────────────────────────────────────────────────
+
+// Échec de génération toléré : l'archive complète reste valide et la maison
+// sait retomber dessus (extraireApercu) pour les cartes plus anciennes.
+export async function enregistrerApercuDepuisCdz(
+  idUser: number,
+  carteId: number,
+  octets: Uint8Array,
+): Promise<void> {
+  try {
+    const apercu = await extraireApercu(octets);
+    const front = await reduireApercu(apercu.front);
+    await ecrireApercu(idUser, carteId, {
+      image: `data:image/png;base64,${encoderBase64(front)}`,
+      datas: apercu.datas,
+      deck: apercu.deck,
+    });
+  } catch {
+    // Aperçu facultatif : jamais de blocage de la génération/récupération.
+  }
+}
+
+export async function lireApercu(idUser: number, carteId: number): Promise<ApercuLocal | null> {
+  if (Platform.OS === 'web') {
+    try {
+      const valeur = (await operationPlace('apercus', cleCarte(idUser, carteId))) as
+        | ApercuLocal
+        | undefined;
+      return valeur && typeof valeur.image === 'string' ? valeur : null;
+    } catch {
+      return null;
+    }
+  }
+  const fichier = new File(Paths.document, String(idUser), 'previews', `${carteId}.json`);
+  if (!fichier.exists) return null;
+  try {
+    const valeur = JSON.parse(fichier.textSync()) as ApercuLocal;
+    return typeof valeur.image === 'string' ? valeur : null;
+  } catch {
+    return null;
+  }
+}
+
+async function ecrireApercu(idUser: number, carteId: number, apercu: ApercuLocal): Promise<void> {
+  if (Platform.OS === 'web') {
+    await operationPlace('apercus', cleCarte(idUser, carteId), apercu);
     return;
   }
-  const fichier = new File(Paths.document, String(idUser), `${carteId}.cdz`);
-  if (fichier.exists) await fichier.delete();
+  const dossier = new Directory(Paths.document, String(idUser), 'previews');
+  dossier.create({ idempotent: true });
+  await new File(dossier, `${carteId}.json`).write(JSON.stringify(apercu));
+}
+
+async function supprimerApercu(idUser: number, carteId: number): Promise<void> {
+  if (Platform.OS === 'web') {
+    try {
+      const base = await ouvrirBase();
+      await new Promise((filtre, remettre) => {
+        const transaction = base.transaction('apercus', 'readwrite');
+        transaction.objectStore('apercus').delete(cleCarte(idUser, carteId));
+        transaction.oncomplete = () => filtre(null);
+        transaction.onerror = () => remettre(new Error('IndexedDB suppression aperçu impossible'));
+      });
+    } catch {
+      // Dégradation : une entrée orpheline reste sans impact fonctionnel.
+    }
+    return;
+  }
+  const fichier = new File(Paths.document, String(idUser), 'previews', `${carteId}.json`);
+  if (fichier.exists) {
+    try {
+      await fichier.delete();
+    } catch {
+      // Dégradation : un aperçu orphelin reste sans impact fonctionnel.
+    }
+  }
 }
 
 // ─── Natif (expo-file-system API nouvelle) ──────────────────────────────────
@@ -110,8 +212,8 @@ function fichierIndexNatif(idUser: number): File {
 // ─── Web : IndexedDB custom (aucune dépendance) ─────────────────────────────
 
 const NOM_BDD = 'codebara-cdz';
-const VERSION_BDD = 1;
-const PLACES = ['cartes', 'index'] as const;
+const VERSION_BDD = 2;
+const PLACES = ['cartes', 'index', 'apercus'] as const;
 
 let baseConnexion: IDBDatabase | null = null;
 

@@ -83,6 +83,7 @@ const MODE_DEBUG =
             nickname: donnees.nickname,
             mail: donnees.mail,
             amount: donnees.amount,
+            avatar: donnees.avatar,
             hash: donnees.hash,
             apiToken: donnees.apiToken,
             requestToken: donnees.requestToken,

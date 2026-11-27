@@ -31,6 +31,13 @@
     },
     "plugins": [
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Autoriser $(PRODUCT_NAME) à utiliser une photo comme avatar.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "Autoriser $(PRODUCT_NAME) à accéder à la caméra pour lire les codes-barres",

@@ -17,6 +17,8 @@ import {
   quitterSession,
 } from '../services/api';
 import { evaluerMotDePasse, type EvaluationMotDePasse } from '../utils/motDePasse';
+import Avatar from './avatar';
+import AvatarEditeur from './avatar-editeur';
 
 // Indicateur de niveau : libellé et couleur selon le nombre de règles
 // respectées (0–2 faible, 3–4 moyen, 5 fort — cf. src/utils/motDePasse.ts).
@@ -53,6 +55,7 @@ export default function MairieEcran() {
   const [motDePasse, setMotDePasse] = useState('');
   const [afficherMdp, setAfficherMdp] = useState(false);
   const [enEnvoiMdp, setEnEnvoiMdp] = useState(false);
+  const [editeurAvatar, setEditeurAvatar] = useState(false);
 
   const sessionActive = utilisateur.apiToken !== null;
   const evaluation = evaluerMotDePasse(motDePasse);
@@ -108,6 +111,20 @@ export default function MairieEcran() {
     }
   };
 
+  // Avatar : PNG 150×150 produit par l'éditeur, envoyé par PUT /user (le
+  // serveur écrit contents/user/<id>/avatar.png et renvoie la data URI).
+  // `null` demande la suppression. Le compte debug reste purement local.
+  const enregistrerAvatar = async (avatar: string | null) => {
+    if (sessionActive) {
+      const profil = await modifierUtilisateurServeur({ avatar });
+      dispatcher(modifierProfil({ avatar: profil.avatar }));
+      setMessage({ texte: 'Avatar enregistré sur le serveur.', erreur: false });
+    } else {
+      dispatcher(modifierProfil({ avatar }));
+      setMessage({ texte: 'Avatar enregistré localement (aucune session serveur).', erreur: false });
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.flex}
@@ -118,6 +135,22 @@ export default function MairieEcran() {
         <Text style={styles.sousTitre}>Tes informations personnelles</Text>
 
         <View style={styles.carte}>
+          <View style={styles.ligneAvatar}>
+            <Avatar
+              uri={utilisateur.avatar}
+              nom={utilisateur.nickname}
+              taille={56}
+              initiales={2}
+            />
+            <Pressable
+              style={styles.boutonAvatar}
+              onPress={() => setEditeurAvatar(true)}
+              accessibilityLabel="Changer mon avatar"
+              accessibilityRole="button"
+            >
+              <Text style={styles.boutonAvatarTexte}>Changer l’avatar</Text>
+            </Pressable>
+          </View>
           <Text style={styles.infoLigne}>
             Mail&nbsp;: {utilisateur.mail || '—'}
           </Text>
@@ -237,6 +270,12 @@ export default function MairieEcran() {
           )}
         </View>
       </ScrollView>
+      <AvatarEditeur
+        visible={editeurAvatar}
+        avatarActuel={utilisateur.avatar}
+        onFermer={() => setEditeurAvatar(false)}
+        onEnregistrer={enregistrerAvatar}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -271,6 +310,24 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     gap: 8,
+  },
+  ligneAvatar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 6,
+  },
+  boutonAvatar: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#d1d5db',
+  },
+  boutonAvatarTexte: {
+    color: '#1d4ed8',
+    fontWeight: '600',
   },
   infoLigne: {
     fontSize: 14,

@@ -12,31 +12,25 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import {
-  ErreurApi,
   ErreurSession,
-  listerCartesAmi,
+  listerApercusAmi,
   recupererCarteAmi,
   type CarteAmi,
-  type CarteAmiChargee,
 } from '../services/api';
 import { encoderBase64 } from '../utils/base64';
-import {
-  cdzDepuisBase64,
-  extraireApercu,
-  ouvrirCdz,
-  type ApercuCarte,
-  type Cdz,
-} from '../utils/cdz';
+import { cdzDepuisBase64, ouvrirCdz, type ApercuCarte, type Cdz } from '../utils/cdz';
 import IncrustationNomCarte from './incrustation-nom-carte';
 import VisuelCarte from './visuel-carte';
 
 // Maison d'un AMI visitée — LECTURE SEULE (décision owner 2026-11-19).
 //
-// Chargement en deux temps (contrat §5.14) :
-//   1. `GET /friend/{id}/cards` → liste légère de métadonnées (sans archive) ;
-//   2. `GET /friend/{iduser}/cards/{idcard}` → UNE archive .cdz par carte de la
-//      liste, décodée EN MÉMOIRE (`extraireApercu` grille, `ouvrirCdz` détail).
-// Le serveur vérifie l'amitié validée ET l'appartenance de la carte à l'ami.
+// Chargement en deux temps (v0.0.22) :
+//   1. `GET /friend/{id}/previews` → métadonnées + aperçus PNG à 20 % pour la
+//      grille (aucun .cdz complet téléchargé) ;
+//   2. `GET /friend/{iduser}/cards/{idcard}` → UNE archive .cdz, uniquement
+//      quand une carte est ouverte en détail (`ouvrirCdz`, décodage en mémoire).
+// Les anciennes routes `/cards` restent inchangées côté serveur. Le serveur
+// vérifie l'amitié validée ET l'appartenance de la carte à l'ami.
 // Aucune écriture, jamais :
 //   - PAS de `lireCarteLocale` / `enregistrerCarte` (services/collection.ts) ;
 //   - PAS de `majIndex` (index local des noms) ;
@@ -48,10 +42,13 @@ import VisuelCarte from './visuel-carte';
 // La maison de la recherche générale n'ouvre PAS cette fenêtre : seul l'onglet
 // « Amis » (amis validés) appelle `naviguer({ nom: 'maison-visite', … })`.
 
+// L'endpoint /friend/{id}/previews ne porte que l'image réduite (20 %) et les
+// métadonnées de la liste : ni datas.json ni deck.json. Le nom complet et le
+// visuel 3D sont chargés avec le .cdz, uniquement à l'ouverture du détail.
 type Apercu = {
   image: string;
-  datas: ApercuCarte['datas'];
-  deck: ApercuCarte['deck'];
+  datas: Partial<ApercuCarte['datas']> | null;
+  deck: Partial<NonNullable<ApercuCarte['deck']>> | null;
 };
 
 type EtatChargement =
@@ -100,24 +97,10 @@ export default function MaisonVisiteEcran({
     ),
   );
 
-  const preparerApercu = useCallback(async (carte: CarteAmiChargee) => {
-    const octets = cdzDepuisBase64(carte.cardBase64);
-    // Libérer la chaîne base64 (~2,5 Mo) dès le décodage pour soulager la
-    // mémoire sur mobile (sinon accumulation → fermeture de l'app sur la
-    // dernière carte). Les octets décodés restent pour le détail.
-    carte.cardBase64 = '';
-    const apercu = await extraireApercu(octets);
-    octetsRef.current.set(carte.id, octets);
-    definirApercus((actuels) => ({
-      ...actuels,
-      [carte.id]: {
-        image: `data:image/png;base64,${encoderBase64(apercu.front)}`,
-        datas: apercu.datas,
-        deck: apercu.deck,
-      },
-    }));
-  }, []);
-
+  // Grille : un seul appel au serveur, les aperçus 20 % (PNG) sont fournis
+  // avec les métadonnées. Aucun .cdz complet n'est téléchargé ici — c'est le
+  // changement majeur de v0.0.22 (avant : une archive par carte, décodée en
+  // mémoire, souvent plusieurs Mo et des tokens consommés jusqu'à l'épuisement).
   const charger = useCallback(async () => {
     annuleRef.current = false;
     definirEtat({ phase: 'liste' });
@@ -129,75 +112,21 @@ export default function MaisonVisiteEcran({
     definirDetail(null);
     definirDetailErreur(null);
     try {
-      const liste = await listerCartesAmi(amiId);
+      const liste = await listerApercusAmi(amiId);
       if (annuleRef.current) return;
       if (liste.length === 0) {
         definirEtat({ phase: 'vide' });
         return;
       }
-
-      // Une carte à la fois : la modal affiche la progression réelle et le
-      // couple de tokens est consommé/roté sereinement (file dans api.ts).
-      definirEtat({ phase: 'cartes', chargees: 0, total: liste.length });
-      const chargees: CarteAmi[] = [];
-      const echecs: number[] = [];
-      let premierEchec: string | null = null;
-      for (const [index, modele] of liste.entries()) {
-        if (annuleRef.current) return;
-        try {
-          const carte = await recupererCarteAmi(amiId, modele.id);
-          if (annuleRef.current) return;
-          try {
-            // Archive illisible : la carte reste affichée par son numéro.
-            await preparerApercu(carte);
-          } catch {
-            // Décodeur tolérant : on ne bloque pas le chargement des suivantes.
-          }
-          if (annuleRef.current) return;
-          chargees.push({
-            id: carte.id,
-            cardHash: carte.cardHash,
-            cardpower: carte.cardpower,
-            health: carte.health,
-            attack: carte.attack,
-          });
-          definirCartes([...chargees]);
-          definirEtat({
-            phase: 'cartes',
-            chargees: chargees.length,
-            total: liste.length,
-          });
-        } catch (erreur) {
-          if (erreur instanceof ErreurSession) throw erreur;
-          if (annuleRef.current) return;
-          // Une ErreurApi SANS token roté, même après le retry de
-          // recupererCarteAmi, signifie que le couple a pu être consommé sans
-          // qu'on reçoive son remplacement. Continuer enverrait un token
-          // périmé → « Invalid REQUEST TOKEN » → fausse déconnexion. On stoppe
-          // et on garde les cartes déjà chargées.
-          if (erreur instanceof ErreurApi && !erreur.tokenRotate) {
-            echecs.push(...liste.slice(index).map((restant) => restant.id));
-            definirAvertissement(
-              `Transfert interrompu : ${(erreur as Error).message}. Rouvre la maison pour reprendre.`,
-            );
-            break;
-          }
-          echecs.push(modele.id);
-          if (premierEchec === null) {
-            premierEchec = (erreur as Error).message;
-          }
-        }
-      }
-      if (annuleRef.current) return;
-      definirCartesEnEchec(echecs);
-      definirEtat(
-        chargees.length === 0
-          ? {
-              phase: 'erreur',
-              message: premierEchec ?? `Impossible de charger les cartes de ${nickname}.`,
-            }
-          : { phase: 'pret' },
+      definirCartes(
+        liste.map(({ preview: _preview, ...metadonnees }) => metadonnees),
       );
+      const images: Record<number, Apercu> = {};
+      for (const carte of liste) {
+        if (carte.preview) images[carte.id] = { image: carte.preview, datas: null, deck: null };
+      }
+      definirApercus(images);
+      definirEtat({ phase: 'pret' });
     } catch (erreur) {
       if (annuleRef.current) return;
       if (erreur instanceof ErreurSession) {
@@ -206,7 +135,7 @@ export default function MaisonVisiteEcran({
       }
       definirEtat({ phase: 'erreur', message: (erreur as Error).message });
     }
-  }, [amiId, nickname, preparerApercu]);
+  }, [amiId]);
 
   useEffect(() => {
     // Un seul chargement à l'ouverture ; toute requête est sérialisée dans api.ts.
@@ -220,14 +149,18 @@ export default function MaisonVisiteEcran({
 
   const ouvrirDetail = async (carte: CarteAmi) => {
     definirDetailErreur(null);
-    const octets = octetsRef.current.get(carte.id);
-    if (!octets) {
-      definirDetailErreur('Archive indisponible en mémoire — rouvre la maison.');
-      return;
-    }
     try {
-      // Validation complète (sha256 == cardHash §6.3) SUR LES OCTETS DÉJÀ EN
-      // MÉMOIRE : aucun téléchargement, aucune écriture locale.
+      // Le .cdz complet n'est récupéré qu'ici, pour la vue détaillée. Une
+      // fois décodé, il reste en mémoire le temps de la visite (aucune écriture
+      // locale, aucun second appel si l'utilisateur rouvre la même carte).
+      let octets = octetsRef.current.get(carte.id);
+      if (!octets) {
+        const chargee = await recupererCarteAmi(amiId, carte.id);
+        octets = cdzDepuisBase64(chargee.cardBase64);
+        chargee.cardBase64 = ''; // libérer ~2,5 Mo de chaîne base64 sur mobile
+        octetsRef.current.set(carte.id, octets);
+      }
+      // Validation complète (sha256 == cardHash §6.3), en lecture seule.
       const cdz = await ouvrirCdz(octets, carte.cardHash ?? undefined);
       definirDetail({ carte, cdz });
     } catch (erreur) {
@@ -356,11 +289,11 @@ export default function MaisonVisiteEcran({
         >
           {cartes.map((carte) => {
             const apercu = apercus[carte.id];
-            const nom = apercu?.datas.name ?? '';
+            const nom = apercu?.datas?.name ?? '';
             const libelle = nom !== '' ? nom : `Carte #${carte.id}`;
-            const puissance = apercu?.datas.power ?? carte.cardpower ?? '—';
-            const sante = apercu?.datas.health ?? carte.health ?? '—';
-            const attaque = apercu?.datas.attack ?? carte.attack ?? '—';
+            const puissance = apercu?.datas?.power ?? carte.cardpower ?? '—';
+            const sante = apercu?.datas?.health ?? carte.health ?? '—';
+            const attaque = apercu?.datas?.attack ?? carte.attack ?? '—';
             const largeurCarte = Math.max(1, largeurGrille / COLONNES - 8);
             return (
               <View key={carte.id} style={[styles.cellule, { width: `${100 / COLONNES}%` }]}>

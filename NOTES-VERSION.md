@@ -6,6 +6,12 @@ courante embarquée dans l'app (`src/data/notes-version.ts`, généré par
 `npm run maj:notes`). Les nouveautés sont suivies à partir de v0.0.8 ; les
 évolutions antérieures ne sont pas listées.
 
+## v0.0.22
+
+- Tu peux choisir un avatar pour ton compte : six images intégrées ou une photo de ta bibliothèque, recadrée en cercle avec zoom et déplacement. L'avatar est enregistré sur le serveur et s'affiche dans l'en-tête et dans l'École. Sans avatar, tes initiales apparaissent dans un cercle gris.
+- La monnaie affichée dans l'en-tête est maintenant ton montant réel, pas une valeur fixe.
+- Les maisons affichent des aperçus de cartes à 20 % : la tienne les garde en cache, celle d'un ami les reçoit directement. L'archive complète n'est téléchargée que quand tu ouvres le détail d'une carte.
+
 ## v0.0.21
 
 - Correction d'un crash au démarrage sur les builds Android installés via APK : la minification du code ne supprime plus les classes nécessaires aux notifications en arrière-plan.

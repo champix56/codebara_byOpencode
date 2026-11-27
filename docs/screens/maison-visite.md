@@ -2,30 +2,33 @@
 
 ## Rôle
 
-Afficher la maison d'un **ami validé** sans jamais la modifier. Le chargement se
-fait en deux temps (contrat serveur §5.14) : `GET /friend/{id}/cards` renvoie la
-**liste des cartes** (métadonnées seules), puis
-`GET /friend/{iduser}/cards/{idcard}` renvoie **chaque carte de la liste**, une
-par une, avec son `.cdz`. Le serveur vérifie l'amitié validée ET que la carte
-appartient bien à l'ami. Les archives sont décodées **en mémoire uniquement** :
-aucun fichier local, aucun renommage, aucune écriture côté serveur.
+Afficher la maison d'un **ami validé** sans jamais la modifier. Depuis v0.0.22,
+`GET /friend/{id}/previews` renvoie en un appel les métadonnées et les **aperçus
+PNG à 20 %** pour la grille : plus aucun `.cdz` téléchargé pour l'affichage de
+la maison. `GET /friend/{iduser}/cards/{idcard}` reste réservé à l'ouverture
+d'une carte en détail (archive décodée **en mémoire uniquement**, aucun fichier
+local, aucun renommage, aucune écriture côté serveur). Les anciennes routes
+`/friend/{id}/cards` ne sont pas utilisées par l'écran mais restent disponibles.
+Le serveur vérifie l'amitié validée ET que la carte appartient bien à l'ami.
 
 ## Structure visuelle
 
 - En-tête commun `EnteteEcran` : logo hauteur du texte + titre « Maison de
   <nickname> (visite) » + chevron de retour (ajouté par `App.tsx`) ; à droite
-  pièce/valeur `1000` en bulle vert clair et avatar (initiales du nickname) →
-  `mairie`.
-- **Modal de chargement** (plein écran, fond translucide) tant que la maison se
-  remplit : `ActivityIndicator`, titre « Chargement de la maison de
+  pièce/montant réel (`amount`, « — » si absent) en bulle vert clair et avatar
+  (image ou initiales du nickname) → `mairie`.
+- **Modal de chargement** (plein écran, fond translucide) pendant le seul appel
+  d'aperçus : `ActivityIndicator`, titre « Chargement de la maison de
   <nickname> », état « Récupération de la liste des cartes… » puis « Carte 3 sur
   12 chargées… », barre de progression et rappel « Lecture seule — aucune carte
   n'est enregistrée sur l'appareil. »
 - Banderole « Maison de <nickname> » avec rappel « Visite en lecture seule —
   aucune carte ne peut être modifiée. »
-- Grille d'aperçus (3 colonnes en natif, 4 sur le web) : image `front.png` +
-  nom incrusté (`deck.json`), nom et statistiques `P / S / A`. Une archive
-  illisible reste affichée par son `#id`. Chaque cellule est cliquable.
+- Grille d'aperçus (3 colonnes en natif, 4 sur le web) : image `front.png`
+  réduite à 20 % reçue du serveur, libellé `Carte #id` et statistiques
+  `P / S / A` des métadonnées. Le nom complet et `deck.json` n'arrivent qu'avec
+  le `.cdz` du détail. Sans aperçu, la cellule affiche son `#id`. Chaque cellule
+  est cliquable.
 - **Détail** (au clic sur une carte) : « ‹ Retour à la maison de <nickname> »,
   badge « Visite en lecture seule », image `perso`, nom, `#id`, visuel 3D
   `VisuelCarte` (front/back, rotation, zoom pincement), statistiques et
@@ -35,14 +38,12 @@ aucun fichier local, aucun renommage, aucune écriture côté serveur.
 
 | État | Affichage |
 | --- | --- |
-| Liste en cours | Modal : « Récupération de la liste des cartes… » |
-| Cartes en cours | Modal : « Carte N sur Total chargées… » + barre de progression |
+| Liste en cours | Modal : « Récupération de la liste des cartes… » (un seul appel `/previews`) |
 | Liste vide | « <nickname> n'a pas encore de carte. » |
-| 200 avec cartes | Grille d'aperçus (décodage séquentiel, une archive à la fois) |
+| 200 avec cartes | Grille d'aperçus PNG 20 % reçus du serveur, sans `.cdz` |
 | Erreur API / réseau / 404 Friend not found | Message d'erreur + bouton « Réessayer » |
-| Une carte unitaire échoue (métier/404) | Les autres cartes chargent quand même ; message sous la grille avec les `#id` en échec |
-| Réponse de carte perdue/avortée (mobile) | `recupererCarteAmi` réessaie **une fois** (grâce d'un token côté serveur) ; la maison se charge intégralement |
-| Transfert interrompu après retry | Boucle arrêtée, cartes déjà chargées conservées, bandeau ambre « Transfert interrompu… Rouvre la maison pour reprendre. » — **pas** de fausse déconnexion |
+| Aperçu indisponible | Cellule affichée par son `#id`, carte toujours ouvrable en détail |
+| Détail en cours | `recupererCarteAmi` récupère **le seul `.cdz`** demandé, puis visuel 3D + stats en lecture seule |
 | Détail en cours | Visuel 3D + stats en lecture seule ; retour à la grille |
 | Archive corrompue au détail | Message d'erreur (contrôle `sha256 == cardHash` §6.3) |
 | Session morte | Redirection connexion gérée dans `api.ts` |

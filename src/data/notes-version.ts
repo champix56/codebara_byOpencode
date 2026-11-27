@@ -1,14 +1,22 @@
 // GÉNÉRÉ par scripts/maj-notes-version.mjs — NE PAS ÉDITER À LA MAIN.
 // Source maintenue : NOTES-VERSION.md (racine) — npm run maj:notes après édition.
 // VERSION_APPLI = première section du md (la plus récente) ; affichée en jeu
-// sous le bandeau publicitaire (« CodEbara v0.0.21 ») et
+// sous le bandeau publicitaire (« CodEbara v0.0.22 ») et
 // consommée par la fenêtre notes de version.
 
-export const VERSION_APPLI = '0.0.21';
+export const VERSION_APPLI = '0.0.22';
 
 export type NoteVersion = { version: string; lignes: string[] };
 
 export const NOTES_VERSION: NoteVersion[] = [
+  {
+    "version": "v0.0.22",
+    "lignes": [
+      "Tu peux choisir un avatar pour ton compte : six images intégrées ou une photo de ta bibliothèque, recadrée en cercle avec zoom et déplacement. L'avatar est enregistré sur le serveur et s'affiche dans l'en-tête et dans l'École. Sans avatar, tes initiales apparaissent dans un cercle gris.",
+      "La monnaie affichée dans l'en-tête est maintenant ton montant réel, pas une valeur fixe.",
+      "Les maisons affichent des aperçus de cartes à 20 % : la tienne les garde en cache, celle d'un ami les reçoit directement. L'archive complète n'est téléchargée que quand tu ouvres le détail d'une carte."
+    ]
+  },
   {
     "version": "v0.0.21",
     "lignes": [

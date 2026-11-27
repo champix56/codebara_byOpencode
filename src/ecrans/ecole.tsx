@@ -8,6 +8,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import Avatar from '../components/avatar';
 import {
   naviguer,
 } from '../navigation/navigateur';
@@ -252,9 +253,7 @@ export default function Ecole() {
             renderItem={({ item }) => (
               <View style={styles.resultat}>
                 <View style={styles.avatar}>
-                  <Text style={styles.avatarTexte}>
-                    {item.nickname.slice(0, 1).toUpperCase() || '?'}
-                  </Text>
+                  <Avatar uri={item.avatar} nom={item.nickname} taille={40} />
                 </View>
                 <View style={styles.userInfos}>
                   <Text style={styles.userPseudo}>{item.nickname}</Text>
@@ -368,9 +367,7 @@ export default function Ecole() {
                 accessibilityLabel={`Visiter la maison de ${item.nickname}`}
               >
                 <View style={styles.avatar}>
-                  <Text style={styles.avatarTexte}>
-                    {item.nickname.slice(0, 1).toUpperCase() || '?'}
-                  </Text>
+                  <Avatar uri={item.avatar} nom={item.nickname} taille={40} />
                 </View>
                 <View style={styles.userInfos}>
                   <Text style={styles.userPseudo}>{item.nickname}</Text>
@@ -546,18 +543,7 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#dbeafe',
-    alignItems: 'center',
-    justifyContent: 'center',
     marginRight: 12,
-  },
-  avatarTexte: {
-    color: '#1d4ed8',
-    fontSize: 18,
-    fontWeight: '700',
   },
   userInfos: {
     flex: 1,

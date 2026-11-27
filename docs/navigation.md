@@ -36,10 +36,10 @@ maison `EnteteEcran`, ou bouton système Android) dépile via `retourner`.
 Après l'enregistrement du nom d'une carte fabriquée, la pile empile le **détail
 carte** au-dessus de l'usine (exigence produit 2026-11-15).
 
-L'avatar de l'en-tête (jusqu'à 2 initiales du nickname, à droite de la pièce et
-de sa valeur) ouvre directement la `mairie` depuis toute fenêtre munie de cet
-en-tête ; un clic depuis la mairie elle-même est sans effet (pas de doublon
-empilé).
+L'avatar de l'en-tête (image ronde du compte, sinon jusqu'à 2 initiales du
+nickname, à droite de la pièce et de son montant réel) ouvre directement la
+`mairie` depuis toute fenêtre munie de cet en-tête ; un clic depuis la mairie
+elle-même est sans effet (pas de doublon empilé).
 
 Les identifiants de fenêtres sont **ASCII sans accent** : `ecole` (le libellé
 affiché « École » porte seul l'accent). Une ressource graphique de saison cible

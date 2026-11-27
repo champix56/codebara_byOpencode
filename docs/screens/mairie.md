@@ -8,12 +8,13 @@ Informations **personnelles** du compte et leur **modification** via `PUT /user`
 (contrat §5.10, tokens requis) :
 - **nickname** — envoyé au serveur, tranche rechargée depuis la réponse ; sans session (compte debug GOD, tokens nuls) la sauvegarde reste **locale** (tranche persistée) ;
 - **mot de passe** — **saisi par l'utilisateur** : validé côté client (§5.10 — le serveur ne reçoit que le hash), envoyé `PUT /user {"password": SHA256(mail_courant + clair)}`, et sur **200 → déconnexion complète** : l'utilisateur se reconnecte avec le nouveau mot de passe.
+- **avatar** — bouton « Changer l'avatar » ouvrant `src/components/avatar-editeur.tsx` : six images intégrées ou photo de la bibliothèque, recadrage circulaire (zoom + glisser), puis PNG 150×150 envoyé `PUT /user {"avatar": dataURI}` ; « Retirer l'avatar » envoie `{"avatar": null}`. Sans session, la modification reste locale.
 
 ## Structure visuelle
 
 - Fond blanc, contenu centré dans un `ScrollView` (clavier géré par `KeyboardAvoidingView` padding sur iOS).
 - Titre « Ma mairie » + sous-titre gris.
-- Bloc infos en lecture seule (fond gris arrondi) : `Mail`, `Identifiant` (`user #…`), `Monnaie` (`amount`, valeur serveur) — « — » si tranche vide.
+- Bloc infos (fond gris arrondi) : aperçu de l'avatar (image circulaire ou initiales) + bouton « Changer l'avatar », puis `Mail`, `Identifiant` (`user #…`), `Monnaie` (`amount`, valeur serveur) — « — » si tranche vide.
 - Largeur max 320 px :
   - « Nickname » : `TextInput` prérempli (`autoCapitalize="none"`) + bouton vert « Enregistrer » ;
   - « Nouveau mot de passe » : `TextInput` **masqué** (`secureTextEntry`) dans une ligne avec bouton-lien vert **« Afficher » / « Masquer »** à droite (bascule `afficherMdp`) ;

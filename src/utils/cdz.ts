@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import { CryptoDigestAlgorithm, digest } from 'expo-crypto';
-import { decoderBase64 } from './base64';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { decoderBase64, encoderBase64 } from './base64';
 
 // Pipeline « .cdz » du contrat pyCodebara2 (§5.3, §6.2, §6.3) :
 //  - archive .cdz = ZIP (compression DEFLATED) servie en base64 par le serveur ;
@@ -300,4 +301,41 @@ export async function extraireApercu(octets: Uint8Array): Promise<ApercuCarte> {
     }
   }
   return { front, datas: donnees, deck };
+}
+
+// ─── Aperçu léger à 20 % (listes de la maison) ───────────────────────────────
+
+// Décision produit (v0.0.22) : l'aperçu mis en cache est 20 % de la dimension
+// d'origine du front.png (480×830 → 96×166), sur le client COMME sur le
+// serveur. Le .cdz complet reste réservé à la vue détaillée.
+export const TAUX_APERCU = 0.2;
+
+// Dimensions lues dans l'en-tête IHDR d'un PNG (octets 16 à 23, big-endian).
+export function dimensionsPng(octets: Uint8Array): { largeur: number; hauteur: number } | null {
+  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (octets.length < 24 || signature.some((octet, index) => octets[index] !== octet)) {
+    return null;
+  }
+  const largeur =
+    (octets[16] << 24) | (octets[17] << 16) | (octets[18] << 8) | octets[19];
+  const hauteur =
+    (octets[20] << 24) | (octets[21] << 16) | (octets[22] << 8) | octets[23];
+  return largeur > 0 && hauteur > 0 ? { largeur, hauteur } : null;
+}
+
+// Redimensionne un front.png extrait d'un .cdz sans toucher à l'archive ni à
+// ses hashs.json (vérifiés seulement au détail). Le PNG réduit est réencodé,
+// avec transparence préservée.
+export async function reduireApercu(front: Uint8Array): Promise<Uint8Array> {
+  const dimensions = dimensionsPng(front);
+  if (!dimensions) throw new ErreurCdz('front.png illisible dans l’archive .cdz');
+  const cible = {
+    width: Math.max(1, Math.round(dimensions.largeur * TAUX_APERCU)),
+    height: Math.max(1, Math.round(dimensions.hauteur * TAUX_APERCU)),
+  };
+  const source = `data:image/png;base64,${encoderBase64(front)}`;
+  const rendu = await ImageManipulator.manipulate(source).resize(cible).renderAsync();
+  const resultat = await rendu.saveAsync({ format: SaveFormat.PNG, base64: true });
+  if (!resultat.base64) throw new ErreurCdz('Réduction de l’aperçu impossible');
+  return decoderBase64(resultat.base64);
 }

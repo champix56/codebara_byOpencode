@@ -76,6 +76,7 @@ async function traiterClicNotification(): Promise<void> {
             nickname: donnees.nickname,
             mail: donnees.mail,
             amount: donnees.amount,
+            avatar: donnees.avatar,
             hash: donnees.hash,
             apiToken: utilisateur.apiToken,
             requestToken: utilisateur.requestToken,
